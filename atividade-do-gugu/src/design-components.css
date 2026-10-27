@@ -1,0 +1,30 @@
+/* Componentes-base do sistema visual provisório do Help RDS. */
+.continue-section{margin-top:42px;padding:23px;background:var(--surface-muted);border:1px solid var(--line);}
+.continuity-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);}
+.continuity-card{min-height:190px;padding:var(--space-4);background:var(--surface);border:1px solid var(--line);border-top:2px solid var(--accent);display:flex;flex-direction:column;align-items:flex-start;}
+.continuity-card:nth-child(2){border-top-color:var(--orange);}
+.continuity-card:nth-child(3){border-top-color:#6e8d77;}
+.continuity-index{font:500 9px var(--font-mono);letter-spacing:.7px;color:var(--muted);}
+.continuity-index i{font-style:normal;color:var(--accent);padding:0 3px;}
+.continuity-card h3{font:600 15px var(--font-display);margin:var(--space-4) 0 var(--space-2);}
+.continuity-card p{font-size:11px;line-height:1.6;color:var(--muted);margin:0 0 var(--space-3);}
+.continuity-card .text-link{margin-top:auto;}
+.credits-details .credit-group{margin-top:21px;padding-top:15px;border-top:1px solid var(--line);}
+.credits-details .credit-group h3{font:600 15px var(--font-display);margin:8px 0 4px;}
+.credits-details .credit-group p,.credits-details .design-note{font-size:11px;line-height:1.65;color:var(--muted);}
+
+.table-wrap{width:100%;overflow-x:auto;border:1px solid var(--line);background:var(--surface);}
+.data-table{width:100%;border-collapse:collapse;text-align:left;font-size:12px;}
+.data-table th,.data-table td{padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--line);vertical-align:top;}
+.data-table th{background:var(--surface-muted);font-size:10px;font-weight:600;color:var(--ink);}
+.data-table tr:last-child td{border-bottom:0;}
+.data-table caption{text-align:left;padding:var(--space-3) var(--space-4);font-weight:600;}
+.alert{padding:var(--space-3) var(--space-4);border-left:3px solid var(--accent);background:var(--surface-muted);font-size:12px;line-height:1.6;}
+.alert[role=alert]{border-left-color:#a7463d;}
+.confirm-dialog{width:min(440px,calc(100vw - 32px));border:1px solid var(--line);padding:var(--space-5);background:var(--surface);color:var(--ink);box-shadow:var(--shadow);}
+.confirm-dialog::backdrop{background:rgba(12,20,17,.52);}
+.confirm-dialog h2{font:600 20px var(--font-display);margin:var(--space-2) 0;}
+.confirm-dialog p{font-size:12px;line-height:1.65;color:var(--muted);}
+.dialog-actions{display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-5);}
+@media(max-width:760px){.continuity-grid{grid-template-columns:1fr;}.continuity-card{min-height:160px;}}
+@media(max-width:480px){.data-table th,.data-table td{padding:var(--space-2) var(--space-3);}.confirm-dialog{padding:var(--space-4);}.continue-section{padding:var(--space-4);}}
