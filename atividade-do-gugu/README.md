@@ -1,77 +1,90 @@
-# Help RDS
+# Help RDS — estudos e Administração
 
-Plataforma web de apoio educacional para estudantes do Colégio Raphael Di Santo. O repositório original continha apenas um README, sem aplicação, framework, rotas, testes ou materiais visuais; a implementação foi iniciada de forma enxuta, preservando esse contexto e sem criar uma identidade visual definitiva.
+Plataforma **independente** de apoio a estudantes do Ensino Médio Técnico em Administração da Escola Raphael Di Santo — Unidade Garcia. Não é um canal oficial da escola: não fornece grade, horários, notas, provas, comunicados ou materiais oficiais pré-cadastrados. A identidade visual é uma proposta independente, ainda sujeita à revisão dos responsáveis.
 
-## Tecnologias e arquitetura
+## Diagnóstico e transformação V3
 
-- JavaScript ES modules, HTML semântico e CSS responsivo.
-- Vite 6 para desenvolvimento e build estático; não há backend, conta ou dependência de serviço externo.
-- Navegação por hash (`#/tool/juros-compostos`, `#/category/estudos`), compartilhável por URL.
-- `src/tools.js`: catálogo centralizado, categorias e metadados das ferramentas.
-- `src/calculations.js`: fórmulas independentes da interface, validações e etapas de cálculo.
-- `src/storage.js`: preferências e registros no `localStorage`, com tolerância a dados ausentes/corrompidos.
-- `src/main.js`: shell, páginas, busca, formulários e fluxos de uso.
-- `src/styles.css`: tokens CSS provisórios, layouts, tema claro/escuro e responsividade.
-- `src/design-components.css`: estilos-base reutilizáveis para cards de continuidade, tabelas responsivas, alertas e confirmação acessível.
-- `docs/design-handoff.md`: responsabilidades, fluxo de colaboração, estado da identidade visual e integração futura.
-- `public/design/README.md`: ponto de entrega e organização dos materiais oficiais ainda não fornecidos.
-- `test/calculations.test.js`, `test/storage.test.js` e `test/design-handoff.test.js`: testes de cálculos, persistência local e requisitos de créditos/design com o runner nativo do Node.
+A base já era uma aplicação estática Vite/JavaScript com 38 ferramentas, rotas por hash, calculadoras, organizadores, favoritos e registros locais. Não havia servidor, contas, banco, integrações externas ou IA. A primeira etapa acrescentou matérias pessoais, biblioteca de links, agenda, flashcards e uma identidade visual independente.
 
-Não foram encontrados arquivos de marca no projeto. O Help RDS é apresentado como texto, sem logotipo, mascote, imagens ou identidade definitiva. As imagens de referência fornecidas orientaram provisoriamente o clima creme/navy/laranja e a apresentação em cards, sem copiar suas marcas, ilustrações ou dados fictícios. Cores e tipografia são tokens temporários configuráveis pela equipe de design.
+Antes da V3, a navegação ainda não conectava os conteúdos de Administração a uma jornada de estudo e prática. A auditoria de páginas, dados, tecnologias, integrações, identidade, lacunas e plano está em [`docs/auditoria-admin-v3.md`](docs/auditoria-admin-v3.md); o diagnóstico da etapa anterior está em [`docs/auditoria-e-plano.md`](docs/auditoria-e-plano.md). O aplicativo continua sendo o mesmo: rotas, ferramentas e chaves locais anteriores foram preservadas.
 
-## Ferramentas implementadas
+## O que funciona
 
-O catálogo contém 38 ferramentas, cada uma com rota, descrição, palavras-chave, categoria, tipo e campos próprios:
+- **Início e vida escolar:** navegação pelos eixos de estudo, Administração, laboratório, rotina e desenvolvimento profissional; compromissos e contadores refletem apenas os registros do navegador. Matérias podem ser criadas, editadas e excluídas; seus recursos são associados pelo nome informado, ignorando acentos e maiúsculas. Alterar o nome não modifica os registros associados.
+- **Trilhas de Administração:** seis percursos introdutórios — fundamentos, custos e preço, finanças, marketing, pessoas e estratégia/projetos. Cada um contém conceito, caso fictício, questão de múltipla escolha com retorno comentado e conexão a uma ferramenta. É possível tentar novamente e marcar/desmarcar uma trilha como estudada. A última tentativa por trilha e as marcações ficam no navegador; não são notas oficiais, prova de aprendizagem ou certificação. Os textos são materiais complementares, não conteúdo curricular da escola.
+- **Laboratório empresarial:** informe nome opcional, preço unitário, custo variável unitário, custos fixos e quantidade de um mesmo período. A simulação apresenta receita, custo variável total, contribuição unitária, resultado operacional simplificado, resultado/receita e ponto de equilíbrio. O rascunho fica local; até 100 cenários podem ser salvos, carregados, excluídos com confirmação e comparados dois a dois. A comparação mostra a diferença de resultado B − A e uma tabela de premissas e resultados dos dois cenários. Substituir ou limpar um rascunho preenchido também exige confirmação. Registros inválidos são sinalizados e podem ser removidos separadamente, após confirmação.
+- **Meu futuro:** um mapa visual de cinco passos reversíveis para interesses, competências, projetos, apresentação e próximos passos, com acesso a ferramentas de projetos e anotações. As marcações são autodeclarações locais, não qualificações comprovadas.
+- **Rotina pessoal preservada:** calendário mensal e exportação `.ics`, tarefas, agenda semanal, anotações, projetos, favoritos, histórico, rascunhos, temporizador e 38 ferramentas originais. As datas são cadastradas pelo estudante, não são eventos oficiais; não há notificações.
+- **Biblioteca pessoal:** guardar, editar, excluir, pesquisar, filtrar, ordenar e favoritar links HTTP/HTTPS, com origem informada pelo usuário e detecção de duplicatas que diferem somente no fragmento. A aplicação não hospeda arquivos; documentos são abertos no site de origem e links com usuário/senha embutidos não são aceitos.
+- **Flashcards manuais:** pergunta, resposta, matéria, tema, dificuldade e fonte, com criação, edição, exclusão e sessões de revisão. A autoavaliação difícil/médio/fácil sugere retorno em 1/3/7 dias. Os contadores registram atividade, não acertos comprovados. “Difíceis” reúne cartões assim avaliados ou cadastrados inicialmente como difíceis.
+- **Pesquisa global local:** encontra ferramentas, áreas, trilhas, guias, cenários e conteúdos pessoais deste navegador. Não indexa PDFs externos. Os três guias anteriores de lógica, HTML/CSS e JavaScript continuam acessíveis como conteúdo extra pela área de desenvolvimento profissional; não executam código e não representam o currículo oficial.
+- **Experiência:** nove ilustrações originais geradas, otimizadas em WebP, ícones SVG locais, layout responsivo, modos claro/escuro, foco visível, navegação por teclado e respeito a movimento reduzido. As ilustrações representam objetos e ideias, não fotografias da escola ou de estudantes.
 
-- **Impostos e tributação:** porcentagem tributária, acréscimos e descontos, preço com tributos, conversor bruto/líquido didático, composição de preço, comparador de cenários tributários.
-- **Matemática financeira:** juros simples, juros compostos, variação percentual, regra de três direta, parcelamento, valor presente/futuro, ponto de equilíbrio, orçamento, investimento hipotético.
-- **Marketing:** ROI, taxa de conversão, engajamento, custo por lead e simulador de funil.
-- **Gestão empresarial:** margem de lucro, formador de preço, fluxo de caixa, capital de giro didático, estoque, planejador de projetos.
-- **Recursos humanos:** calculadora de horas, absenteísmo e folha didática com descontos informados.
-- **Estudos e rotina:** lista de tarefas (concluir/reabrir), anotações categorizadas, agenda semanal, calendário de provas/trabalhos, temporizador de foco, rastreador de hábitos.
-- **Planejamento e marketing:** briefing de campanha, planejador editorial, matriz SWOT.
+### Premissas e limites do laboratório
 
-Calculadoras exibem resultado, fórmula/etapas e orientações. Os espaços organizadores permitem adicionar, editar, excluir com confirmação acessível, marcar tarefas concluídas quando aplicável e exportar registros em JSON. Favoritos, histórico, tema, rascunhos das calculadoras e conteúdo dos organizadores ficam localmente no navegador. A página inicial também traz convites funcionais para retomar o histórico, guardar favoritos e abrir o temporizador — sem cadastro, pontos fictícios, newsletter não implementada, ofertas ou compras.
+- Valores monetários aceitam vírgula ou ponto e até duas casas decimais, **sem separador de milhar**. Preço e custo variável: de R$ 0,00 a R$ 1.000.000,00 por unidade; custo fixo: de R$ 0,00 a R$ 1.000.000.000,00; quantidade inteira de 0 a 1.000.000 unidades. Os cálculos monetários usam centavos inteiros.
+- Receita = preço × quantidade; contribuição unitária = preço − custo variável unitário; resultado = receita − custos variáveis totais − custos fixos. Resultado/receita não é calculado se a receita for zero.
+- Com contribuição unitária positiva, o equilíbrio é o custo fixo dividido pela contribuição, arredondado para cima. Se o custo fixo for zero, zero unidades já dão resultado zero; com contribuição negativa, cada unidade vendida piora o resultado. Se houver custo fixo positivo e contribuição não positiva, o modelo não atinge o equilíbrio.
+- O modelo **não prevê demanda nem calcula automaticamente** tributos, despesas, perdas, estoque, inadimplência ou outros fatores. Só considera valores incluídos nas premissas. Não é lucro contábil ou aconselhamento fiscal, contábil, jurídico ou financeiro. Use dados fictícios para aprender e consulte profissionais para decisões reais.
 
-A busca global consulta nome, descrição, categoria e palavras-chave. O catálogo oferece filtros por categoria e tipo e ordenação por nome ou uso recente. Há tema claro/escuro, atalhos `/` e `Ctrl/Cmd + K` para busca, impressão de resultados e exportação/limpeza de dados locais.
+## Limitações e privacidade
 
-## Limitações e confiabilidade
+**Os registros são locais, não privados por autenticação.** Qualquer pessoa com acesso ao mesmo perfil do navegador pode lê-los ou alterá-los. Não há sincronização entre dispositivos, recuperação automática, criptografia, permissões por usuário ou proteção em servidor. O navegador pode bloquear ou apagar o armazenamento; quando uma gravação falha, a interface avisa. Não inclua senhas, dados pessoais sensíveis, links privados ou dados de colegas ou empresas. Em dispositivo compartilhado, exporte o necessário e apague os dados em Configurações.
 
-- Os recursos são locais ao navegador/dispositivo; não há sincronização, conta, backup automático ou colaboração multiusuário. Exportar JSON é a forma de levar uma cópia.
-- As ferramentas de tributação, folha, investimento e RH são explicitamente simulações educacionais. Nenhuma alíquota legal é pré-preenchida e nenhuma fonte de legislação vigente é apresentada como regra oficial.
-- Não há fontes oficiais incorporadas: as operações tributárias usam somente alíquotas/base fornecidas pelo estudante e não constituem cálculo fiscal. Para aplicações reais, consulte legislação e fontes governamentais vigentes, além de profissional qualificado.
-- Horas considera término no dia seguinte quando o horário final é anterior ao inicial; o cálculo não interpreta regras trabalhistas.
-- O temporizador funciona enquanto a página permanece aberta; não há notificação sonora ou serviço em segundo plano.
-- A implementação cobre os recursos descritos acima. Itens do escopo ampliado que não aparecem no catálogo (por exemplo, Canvas, Kanban, simulador de amortização e escala multiusuário) não são anunciados como concluídos.
-- Os dados dos organizadores são texto local, escapado antes de renderização; ainda assim, não inclua informações pessoais sensíveis, especialmente dados de funcionários ou candidatos.
+A exportação JSON é uma cópia sob responsabilidade de quem a baixar; **não há importador integrado**. Links externos podem coletar dados segundo a política do site de destino; origem e disponibilidade não são verificadas automaticamente. O temporizador funciona somente enquanto a aplicação está aberta, sem serviço em segundo plano.
 
-## Responsabilidades e créditos
+Não foram implementados contas, perfil sincronizado, controle real de acesso, uploads/arquivos privados, biblioteca compartilhada, painel administrativo, avisos oficiais, moderação, comunidade, colaboração, assistente de IA, leitura de PDFs, geração automática de conteúdos, simulados completos, área ENEM, notificações ou funcionamento offline/PWA. Há seis questões simples nas trilhas, não uma plataforma de avaliações. Recursos compartilhados exigiriam autorização no servidor e no banco, infraestrutura adequada, conteúdo autorizado, avaliação de custos e requisitos de privacidade/LGPD para menores. Não há testes de isolamento entre contas porque contas e servidor não existem.
 
-**Programação — Ytalo Lima:** desenvolvimento e implementação técnica, arquitetura e navegação, integração de materiais visuais, responsividade técnica, acessibilidade, desempenho, testes e manutenção.
+## Tecnologias e arquivos
 
-**Equipe de design — Pedro Miranda e Matheus Gama:** direção visual e identidade, cores, tipografia, linguagem gráfica, logotipo, ícones, ilustrações, hierarquia, layouts, componentes e orientações de UX/UI.
+- HTML semântico, CSS responsivo, JavaScript ES modules e Vite 6. A aplicação não chama serviços externos em tempo de execução.
+- `src/admin.js`: conteúdo complementar e regras puras das trilhas, progresso e simulação. `src/admin-pages.js` e `src/admin.css`: páginas e estilos da V3.
+- `src/tools.js`, `src/calculations.js`: catálogo e fórmulas das ferramentas anteriores. `src/study.js`: calendário, URLs, flashcards, iCalendar e guias extras.
+- `src/main.js`, `src/study-pages.js`, `src/subject-pages.js`: shell, navegação, pesquisa e interfaces. `src/storage.js`: persistência tolerante a falhas com o prefixo anterior `help-rds:`.
+- Novas coleções V3: `records:admin-progress`, `records:admin-attempts`, `records:business-scenarios`, `records:career-progress` e rascunho `calculator:admin-lab`. Coleções anteriores, incluindo `records:subjects`, `records:library` e `records:flashcards`, continuam legíveis. Não houve migração de banco.
+- `src/styles.css`, `src/design-components.css`, `src/visual.css` e `src/admin.css` compartilham estilos; `src/icons.js` e `src/assets/` contêm ícones e imagens locais. As nove WebPs somam aproximadamente 504 KiB e têm dimensões explícitas; imagens fora da área inicial usam carregamento tardio. Confira os termos aplicáveis às imagens geradas antes de distribuição que exija autorização ou licença específica.
 
-Não foi inventada uma divisão individual de tarefas entre Pedro Miranda e Matheus Gama. A identidade visual definitiva será aplicada após a entrega e aprovação dos materiais pela equipe de design. O processo está detalhado em `docs/design-handoff.md`.
+**Variáveis de ambiente da aplicação:** nenhuma. Não são necessárias chaves de API ou credenciais. `APP_URL` e `CHROMIUM_PATH` são usados apenas nos testes opcionais de navegador.
 
-## Instalação e execução
+## Executar e publicar
 
-Requer Node.js 20.19+ ou 22.12+ (compatibilidade do Vite 6) e npm.
+Requer Node.js 20.19+ ou 22.12+ e npm:
 
 ```bash
-npm install
+cd atividade-do-gugu
+npm ci
 npm run dev
-```
-
-O Vite informa o endereço local para desenvolvimento. Para gerar e conferir a versão de produção:
-
-```bash
 npm test
 npm run build
 npm run preview
 ```
 
-O conteúdo gerado em `dist/` é estático e pode ser publicado em hospedagem estática. Como a navegação usa hash routes, não é necessário configurar fallback de rotas no servidor.
+O servidor de desenvolvimento/preview aceita hosts externos para pré-visualização; não o use como servidor de produção exposto. Para publicação estática, execute o build e publique **o conteúdo de `atividade-do-gugu/dist/`**, incluindo `assets/`. Os caminhos são relativos e as rotas usam `#`, funcionando também em subdiretórios sem fallback de rotas. Verifique início, trilha, laboratório, dados locais e tema após publicar. Use HTTPS e configure cache e cabeçalhos de segurança conforme a hospedagem existente. Não há um deploy automático configurado no repositório nem um novo serviço pago. O custo de hospedagem depende do plano contratado; serviços futuros precisam de avaliação separada.
 
-## Validação
+## Testes e qualidade
 
-`npm test` executa testes automatizados das fórmulas financeiras e percentuais, casos de zero e entradas inválidas, limites de taxas, composição de preço, arredondamentos apresentados, virada de dia e presença/metadados do catálogo. `npm run build` valida a compilação de produção.
+- `npm test`: 29 testes unitários cobrindo catálogo, cálculos, simulação em centavos e limites, cenários inválidos, correção e progresso das trilhas, armazenamento, datas, URLs, flashcards e exportação `.ics`.
+- `npm run build`: compilação de produção. Os dois testes de navegador também passaram no build servido a partir de um subdiretório estático; confira novamente na hospedagem de destino.
+- `scripts/qa-browser.mjs`: fluxos anteriores, 38 rotas de ferramentas, dados locais, exclusões, busca, exportações e larguras de 320, 390, 768, 1024 e 1440 px.
+- `scripts/qa-admin.mjs`: trilhas e correção, simulação com vírgula, comparação, persistência, recuperação de dados inválidos, confirmações, carreira, compatibilidade com dados anteriores, busca, exportação, falha de armazenamento e as mesmas cinco larguras.
+- `scripts/qa-a11y.mjs`: axe WCAG 2/2.1 A/AA em 29 rotas, dois temas e duas larguras, incluindo exercícios e simulações preenchidas; não foram detectadas violações nas regras executadas. Testes automatizados não substituem avaliação humana de acessibilidade, conteúdo ou segurança.
+
+Para reproduzir os testes opcionais, tenha um Chromium compatível e instale somente as dependências de teste, sem alterar o manifesto:
+
+```bash
+npm install --no-save --package-lock=false playwright-core @axe-core/playwright
+npm run dev
+# em outro terminal:
+CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-browser.mjs
+CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-admin.mjs
+CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-a11y.mjs
+# APP_URL pode apontar para outra instância da aplicação
+```
+
+## Próximos passos e créditos
+
+Validar conteúdo, identidade e eventual alinhamento à grade real com os responsáveis, sem atribuir caráter oficial sem autorização. Antes de sincronização ou colaboração, definir governança, retenção, autenticação, proteção de arquivos, revisão de uploads e autorização real no servidor e no banco; avaliar custos e fontes antes de integrar IA ou conteúdo externo.
+
+**Programação — Ytalo Lima:** desenvolvimento e implementação técnica, arquitetura e navegação, integração visual, responsividade, acessibilidade, testes e manutenção.
+
+**Equipe de design — Pedro Miranda e Matheus Gama:** direção visual, identidade, cores, tipografia, linguagem gráfica, layouts, componentes e orientações de UX/UI. As contribuições individuais não são subdivididas. A proposta visual e as ilustrações geradas não são apresentadas como materiais aprovados pela equipe ou pela escola; veja [`docs/design-handoff.md`](docs/design-handoff.md).

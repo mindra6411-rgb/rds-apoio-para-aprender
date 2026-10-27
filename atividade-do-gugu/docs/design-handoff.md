@@ -41,14 +41,15 @@ Os diretórios são uma proposta de organização, não uma indicação de que e
 
 ## Referências recebidas nesta atualização
 
-Foram inspecionadas quatro imagens conceituais anexadas à conversa. Elas incluem marcas de exemplo e telas fictícias em inglês, além de perfis e indicadores demonstrativos. A composição geral e o clima cromático (fundo creme, navy, chamadas laranja e cards de aprendizagem) serviram de base para os tokens provisórios e os atalhos funcionais da página inicial, conforme solicitado. As imagens não são identidade aprovada do Help RDS nem materiais oficiais de Pedro Miranda e Matheus Gama: não foram copiadas para o repositório ou usadas como ativos do site. Não foram reproduzidos logotipos, ilustrações, nomes de outras plataformas, perfis ou indicadores demonstrativos.
+Foram inspecionadas quatro imagens conceituais anexadas à conversa. Elas incluem marcas de exemplo e telas fictícias em inglês, além de perfis e indicadores demonstrativos. Na etapa anterior, a composição geral e o clima cromático (fundo creme, navy, chamadas laranja e cards de aprendizagem) serviram de base para os tokens provisórios e os atalhos funcionais da página inicial. As imagens não são identidade aprovada do Help RDS nem materiais oficiais de Pedro Miranda e Matheus Gama: não foram copiadas para o repositório ou usadas como ativos do site. Não foram reproduzidos logotipos, ilustrações, nomes de outras plataformas, perfis ou indicadores demonstrativos.
 
-## Estado temporário do sistema visual
+## Estado do sistema visual
 
-- `src/styles.css` centraliza tokens CSS provisórios de cor, tipografia, espaços, bordas, sombras, foco e breakpoints.
-- O layout atual usa apenas texto para “Help RDS”; não contém logotipo, avatar, fotografia, mascote ou ilustração oficial.
-- Botões, campos, busca, cards, mensagens de resultado, alertas, navegação e grupos de créditos usam classes/componentes compartilhados já existentes.
-- Nenhum token ou estilo atual deve ser interpretado como decisão definitiva de marca. A substituição deve ocorrer após aprovação da equipe de design, preservando os estados de acessibilidade e os temas claro/escuro.
+A base anterior usava **tokens CSS provisórios** em `src/styles.css`, texto para “Help RDS” e não tinha imagens próprias. Nesta atualização, `src/visual.css` aplica uma proposta independente chamada “caderno em movimento”: azul-cobalto, creme, laranja, cores de apoio, tipografia de sistema e ícones SVG locais. `src/assets/` contém nove ilustrações geradas para as atualizações de estudos e Administração, otimizadas em WebP; `src/admin.css` acrescenta os layouts do laboratório, trilhas e desenvolvimento profissional. Elas representam objetos de estudo, não estudantes ou espaços reais da escola.
+
+A proposta e as ilustrações não são materiais oficiais da escola nem são apresentadas como aprovadas por Pedro Miranda e Matheus Gama. Não se atribui a autoria dos novos recursos gerados à equipe de design. Antes de tratá-los como identidade definitiva, cabe aos responsáveis avaliar direção, direitos de uso e aprovação; os materiais oficialmente aprovados ainda devem ser entregues em `public/design/`.
+
+Botões, campos, navegação, cards, calendários, avisos e estados vazios compartilham tokens e padrões. Preservar as variantes claro/escuro, contraste, foco, texto alternativo e movimento reduzido em qualquer substituição futura.
 
 ## Comunicação de continuidade na página inicial
 
@@ -57,3 +58,7 @@ As ideias comerciais de retenção (pontos, newsletter premium, venda cruzada e 
 ## Requisitos para a integração
 
 Ao integrar materiais, manter proporções e áreas de proteção oficiais; usar variantes apropriadas por fundo e breakpoint; fornecer texto alternativo apenas quando a imagem transmitir informação; manter decoração não informativa fora da árvore acessível; preservar foco visível, contraste, movimento reduzido, navegação por teclado e layouts móveis. Conferir build, testes, links, estados interativos e visualização em larguras móveis e desktop após cada integração.
+
+## Revisão desta atualização
+
+As auditorias e planos estão em `docs/auditoria-e-plano.md` e `docs/auditoria-admin-v3.md`. As ilustrações geradas para a proposta independente ficam em `src/assets/`, não no diretório reservado a entregas oficiais. Os testes automatizados e limites da plataforma estão descritos no README. A aprovação humana da identidade permanece pendente.

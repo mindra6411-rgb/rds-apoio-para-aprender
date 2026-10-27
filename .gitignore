@@ -1,0 +1,4 @@
+atividade-do-gugu/node_modules/
+atividade-do-gugu/dist/
+*.log
+.DS_Store
