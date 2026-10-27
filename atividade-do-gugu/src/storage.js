@@ -3,13 +3,34 @@ const read = (key, fallback) => {
   try { const value = localStorage.getItem(PREFIX + key); return value ? JSON.parse(value) : fallback; }
   catch { return fallback; }
 };
-const write = (key, value) => { try { localStorage.setItem(PREFIX + key, JSON.stringify(value)); return true; } catch { return false; } };
-export const getPrefs = () => read('preferences', { theme: 'light', favorites: [], recent: [] });
+const write = (key, value) => {
+  try { localStorage.setItem(PREFIX + key, JSON.stringify(value)); return true; }
+  catch { return false; }
+};
+const stringList = value => Array.isArray(value) ? [...new Set(value.filter(item => typeof item === 'string'))] : [];
+
+export const getPrefs = () => {
+  const value = read('preferences', {});
+  const safe = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return { theme: safe.theme === 'dark' ? 'dark' : 'light', favorites: stringList(safe.favorites), recent: stringList(safe.recent) };
+};
 export const savePrefs = value => write('preferences', value);
-export const getDraft = id => read(`calculator:${id}`, {});
+export const getDraft = id => {
+  const value = read(`calculator:${id}`, {});
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+};
 export const saveDraft = (id, value) => write(`calculator:${id}`, value);
-export const clearDraft = id => { try { localStorage.removeItem(`${PREFIX}calculator:${id}`); } catch {} };
-export const getRecords = key => read(`records:${key}`, []);
+export const clearDraft = id => { try { localStorage.removeItem(`${PREFIX}calculator:${id}`); return true; } catch { return false; } };
+export const getRecords = key => {
+  const value = read(`records:${key}`, []);
+  return Array.isArray(value) ? value.filter(item => item && typeof item === 'object' && !Array.isArray(item)) : [];
+};
 export const saveRecords = (key, records) => write(`records:${key}`, records);
-export const clearAllLocalData = () => Object.keys(localStorage).filter(key => key.startsWith(PREFIX)).forEach(key => localStorage.removeItem(key));
-export const exportLocalData = () => Object.fromEntries(Object.keys(localStorage).filter(key => key.startsWith(PREFIX)).map(key => [key.replace(PREFIX, ''), read(key.replace(PREFIX, ''), null)]));
+export const clearAllLocalData = () => {
+  try { Object.keys(localStorage).filter(key => key.startsWith(PREFIX)).forEach(key => localStorage.removeItem(key)); return true; }
+  catch { return false; }
+};
+export const exportLocalData = () => {
+  try { return Object.fromEntries(Object.keys(localStorage).filter(key => key.startsWith(PREFIX)).map(key => [key.replace(PREFIX, ''), read(key.replace(PREFIX, ''), null)])); }
+  catch { return {}; }
+};

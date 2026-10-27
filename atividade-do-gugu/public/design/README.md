@@ -11,3 +11,5 @@ Organização sugerida, a criar conforme os materiais forem recebidos:
 - `references/` — layouts, regras de aplicação e especificações entregues.
 
 Não colocar aqui mockups conceituais como se fossem arquivos de marca aprovados. Não alterar ou substituir originais; prefira integrar cópias de produção mantendo uma cópia original, registrar procedência/licença e atualizar `docs/design-handoff.md`.
+
+As ilustrações geradas usadas na proposta independente desta atualização estão em `src/assets/`; elas não são materiais oficiais aprovados e não substituem este diretório de entrega.
