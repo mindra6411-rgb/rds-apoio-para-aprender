@@ -22,8 +22,21 @@ function server(args, extra = {}) {
 function run(script, url) {
   return new Promise((resolve,reject) => {
     console.log(`\n--- ${script} ---`);
-    const child=spawn(process.execPath,[`scripts/${script}.mjs`],{stdio:'inherit',env:{...process.env,APP_URL:url,CHROMIUM_PATH:executable}});
-    child.on('error',reject); child.on('exit',(code,signal)=>code===0?resolve():reject(new Error(`${script} falhou (${code ?? signal}).`)));
+    const child=spawn(process.execPath,[`scripts/${script}.mjs`],{stdio:['ignore','pipe','pipe'],env:{...process.env,APP_URL:url,CHROMIUM_PATH:executable}});
+    let errorTail = '';
+    child.stdout.on('data', data => process.stdout.write(data));
+    child.stderr.on('data', data => { process.stderr.write(data); errorTail = (errorTail + String(data)).slice(-3000); });
+    child.on('error',reject);
+    child.on('close',(code,signal) => {
+      if (code === 0) { resolve(); return; }
+      if (process.env.GITHUB_ACTIONS === 'true') {
+        // Os scripts usam apenas dados fictícios; exponha o trecho final do erro
+        // como anotação para facilitar o diagnóstico sem baixar logs completos.
+        const details = (errorTail || `Código ${code ?? signal}`).replace(/\x1b\[[0-9;]*m/g, '').replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+        console.log(`::error title=${script} falhou::${details}`);
+      }
+      reject(new Error(`${script} falhou (${code ?? signal}).`));
+    });
   });
 }
 try {
