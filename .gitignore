@@ -1,4 +1,7 @@
 atividade-do-gugu/node_modules/
 atividade-do-gugu/dist/
+atividade-do-gugu/.env
+atividade-do-gugu/.env.*
+!atividade-do-gugu/.env.example
 *.log
 .DS_Store
