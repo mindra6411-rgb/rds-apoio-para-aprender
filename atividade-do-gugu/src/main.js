@@ -3,18 +3,25 @@ import './design-components.css';
 import './visual.css';
 import './admin.css';
 import './auth.css';
+import './enhancements.css';
 import { validAuthConfig, createBrowserAuthClient, hasSavedAuthSession, inspectAuthCallback, redirectUrl, callbackDestination, accountError, accountApi } from './auth.js';
 import { accountPage, accountLink } from './auth-pages.js';
 import { icon } from './icons.js';
 import { images } from './assets.js';
-import { normalize, localDate, isValidDate, deadlines, upcomingDeadlines, calendarIcs, safeHttpUrl, canonicalUrl, rateFlashcard, guides, findGuide } from './study.js';
+import { normalize, localDate, isValidDate, deadlines, upcomingDeadlines, calendarIcs, safeHttpUrl, canonicalUrl, rateFlashcard, flashcardQueue, guides, findGuide } from './study.js';
 import { agendaPage, libraryPage, libraryResults, flashcardsPage, technologyPage, guidePage, searchResultsPage, searchResultsList } from './study-pages.js';
 import { subjectsPage, subjectPage } from './subject-pages.js';
 import { lessons, findLesson, gradeLesson, careerSteps, simulateBusiness, isUsableScenario } from './admin.js';
 import { adminPage, adminLessonPage, renderQuizFeedback, labPage, renderLabResult, labComparison, careerPage, schoolPage } from './admin-pages.js';
 import { categories, tools, findTool, findCategory } from './tools.js';
 import { calculate, money } from './calculations.js';
-import { getPrefs, savePrefs, getRecords, saveRecords, getDraft, saveDraft, clearDraft, clearAllLocalData, exportLocalData } from './storage.js';
+import { getPrefs, savePrefs, getRecords, saveRecords, getDraft, saveDraft, clearDraft, clearAllLocalData, exportLocalData, getReviewSettings, saveReviewSettings, getOnboarding, saveOnboarding } from './storage.js';
+import { makeBackup, parseBackup, prepareRestore, applyRestore, MAX_BACKUP_BYTES } from './backup.js';
+import { attachSubject, updateSubject } from './subject-links.js';
+import { subjectSelect } from './subject-select.js';
+import { reconcileSteps } from './tasks.js';
+import { privacyPage } from './privacy.js';
+import { offlineStatus, enableOffline, disableOffline } from './offline.js';
 
 const app = document.querySelector('#app');
 // Retire o retorno da URL imediatamente; o código PKCE vive só em memória até
@@ -36,12 +43,17 @@ let businessPreview = null;
 let currentTimer = null;
 let toastTimer;
 let calendarView = new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12);
+let selectedDay = '';
+let searchType = 'all';
 let libraryFilters = { query:'', type:'', sort:'recent', favorites:false };
 let flashState = { mode:'due', completed:[], revealed:false };
 let searchQuery = '';
+let restorePlan = null;
+let pendingFlashDraft = null;
 const makeId = () => globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const route = () => location.hash.replace(/^#\/?/, '') || 'home';
+const route = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'home';
+const detailHref = (path, id) => `#/${path}${typeof id === 'string' && id ? `?item=${encodeURIComponent(id)}` : ''}`;
 const path = value => { location.hash = `/${value}`; };
 const labelType = type => ({calculator:'Calculadora', notes:'Organizador', planner:'Planejador', board:'Lista', timer:'Temporizador'})[type] || 'Ferramenta';
 const categoryName = id => findCategory(id)?.name || '';
@@ -96,12 +108,14 @@ function sidebar(active) {
 }
 function shell(content, active, pageTitle='Help RDS') {
   document.title = `${pageTitle} — Help RDS`;
-  return `<a class="skip-link" href="#main-content" data-action="skip-main">Pular para o conteúdo</a><div class="app-shell">${sidebar(active)}<div class="main-area"><header class="topbar"><button class="mobile-menu icon-button" data-action="menu" aria-label="Abrir navegação" aria-controls="sidebar" aria-expanded="false">${icon('menu')}</button><div class="breadcrumbs"><span>SEU ESPAÇO</span><span class="crumb-divider">/</span><strong>${esc(pageTitle)}</strong></div><div class="top-actions"><div class="search-wrap" role="search">${icon('search')}<input id="global-search" type="search" placeholder="Buscar no seu espaço..." autocomplete="off" aria-label="Buscar ferramentas e conteúdos" /><kbd>Ctrl K</kbd></div><button class="theme-switch" data-action="theme" aria-label="Alternar para tema ${prefs.theme==='dark'?'claro':'escuro'}" title="Alternar tema">${icon(prefs.theme==='dark'?'sun':'moon')}</button>${accountLink(authState.user)}</div></header><main id="main-content" tabindex="-1">${content}</main><footer class="site-footer"><span><strong>help.rds</strong> <span class="footer-sep">·</span> Um espaço independente de apoio ao estudo.</span><a href="#/about">Sobre e créditos ${icon('arrowUp')}</a></footer></div></div><dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description"><form method="dialog"><span class="eyebrow">CONFIRMAÇÃO</span><h2 id="confirm-title">Confirmar ação</h2><p id="confirm-description"></p><div class="dialog-actions"><button type="submit" value="cancel" class="button button-quiet">Cancelar</button><button type="submit" value="confirm" class="button button-danger" id="confirm-submit">Confirmar</button></div></form></dialog><div id="toast" role="status" aria-live="polite" class="toast"></div>`;
+  return `<a class="skip-link" href="#main-content" data-action="skip-main">Pular para o conteúdo</a><div class="app-shell">${sidebar(active)}<div class="main-area"><header class="topbar"><button class="mobile-menu icon-button" data-action="menu" aria-label="Abrir navegação" aria-controls="sidebar" aria-expanded="false">${icon('menu')}</button><div class="breadcrumbs"><span>SEU ESPAÇO</span><span class="crumb-divider">/</span><strong>${esc(pageTitle)}</strong></div><div class="top-actions"><div class="search-wrap" role="search">${icon('search')}<input id="global-search" type="search" placeholder="Buscar no seu espaço..." autocomplete="off" aria-label="Buscar ferramentas e conteúdos" /><kbd>Ctrl K</kbd></div><button class="theme-switch" data-action="theme" aria-label="Alternar para tema ${prefs.theme==='dark'?'claro':'escuro'}" title="Alternar tema">${icon(prefs.theme==='dark'?'sun':'moon')}</button>${accountLink(authState.user)}</div></header><main id="main-content" tabindex="-1">${content}</main><footer class="site-footer"><span><strong>help.rds</strong> <span class="footer-sep">·</span> Um espaço independente de apoio ao estudo.</span><nav aria-label="Informações do projeto"><a href="#/privacidade">Privacidade</a><span class="footer-sep">·</span><a href="#/about">Sobre e créditos ${icon('arrowUp')}</a></nav></footer></div></div><dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description"><form method="dialog"><span class="eyebrow">CONFIRMAÇÃO</span><h2 id="confirm-title">Confirmar ação</h2><p id="confirm-description"></p><div class="dialog-actions"><button type="submit" value="cancel" class="button button-quiet">Cancelar</button><button type="submit" value="confirm" class="button button-danger" id="confirm-submit">Confirmar</button></div></form></dialog><div id="toast" role="status" aria-live="polite" class="toast"></div>`;
 }
 function homePage() {
   const recent = prefs.recent.map(id=>findTool(id)).find(Boolean);
   const favorites = prefs.favorites.map(id=>findTool(id)).filter(Boolean);
   const upcoming = upcomingDeadlines(getDeadlines()).slice(0, 3);
+  const dueCards = flashcardQueue(getRecords('flashcards')).length;
+  const showGuide = !getOnboarding() && getRecords('subjects').length === 0;
   const quick = [
     ['vida-escolar','book','Vida escolar','Matérias e revisões','quick-blue'],
     ['administracao','layers','Administração','Aprenda os fundamentos','quick-orange'],
@@ -116,9 +130,10 @@ function homePage() {
     { href:'carreira', image:images.career, alt:'Ilustração de caderno, lápis e pasta', label:'OLHAR PARA O FUTURO', title:'Meu desenvolvimento', desc:'Reconheça habilidades e crie projetos.', color:'purple', meta:'Um passo de cada vez' },
   ];
   return `<div class="home-greeting"><div><span class="overline"><span class="tiny-spark">✳</span> UM ESPAÇO FEITO PARA VOCÊ</span><h1>Oi, estudante<span class="heading-dot">!</span></h1><p>Um espaço independente para estudantes do Ensino Médio Técnico em Administração.</p></div><div class="greeting-aside"><span class="greeting-spark">${icon('spark')}</span><span>Pequenos passos,<br><strong>grandes descobertas.</strong></span></div></div>
+  ${showGuide?`<section class="start-guide" aria-labelledby="start-guide-title"><div><span class="overline">PRIMEIROS PASSOS</span><h2 id="start-guide-title">Comece do seu jeito.</h2><p>Você pode seguir estes passos ou explorar livremente. Nada será criado sem sua escolha.</p><ol><li><a href="#/materias">Cadastrar uma matéria</a></li><li><a href="#/tool/lista-tarefas">Adicionar uma tarefa</a></li><li><a href="#/flashcards">Criar um cartão de revisão</a></li></ol></div><button type="button" class="text-button" data-action="dismiss-guide">Dispensar guia</button></section>`:''}
   <section class="student-hero"><div class="student-hero-copy"><span class="hero-kicker">${icon('spark')} ESTUDOS + ADMINISTRAÇÃO</span><h2>Suas ideias,<br><em>o mundo em movimento</em><span>.</span></h2><p>Um espaço para estudar, experimentar ideias de negócio e imaginar seus próximos passos.</p><div class="hero-actions"><a href="#/administracao" class="button button-hero">Explorar Administração ${icon('arrowUp')}</a><a href="#/laboratorio" class="hero-secondary">Abrir laboratório ${icon('arrow')}</a></div></div><div class="student-hero-art"><img src="${images.adminHero}" alt="Ilustração de uma pequena loja, caderno e calculadora" width="1200" height="670" fetchpriority="high"><span class="hero-sticker">${icon('spark')} UMA IDEIA<br>DE CADA VEZ</span></div></section>
   <section class="home-section quick-section"><div class="home-section-heading"><div><span class="overline">TUDO À MÃO</span><h2>Seu acesso rápido<span class="heading-dot">.</span></h2><p>Escolha por onde começar.</p></div><a href="#/catalog" class="text-link">Ver ferramentas ${icon('arrow')}</a></div><div class="quick-grid">${quick.map(([href,ic,title,desc,color])=>`<a href="#/${href}" class="quick-link"><span class="quick-icon ${color}">${icon(ic)}</span><span><strong>${title}</strong><small>${desc}</small></span><span class="quick-arrow">${icon('arrowUp')}</span></a>`).join('')}</div></section>
-  <div class="home-content-grid"><section class="home-section discover-section"><div class="home-section-heading"><div><span class="overline">APRENDER, EXPERIMENTAR, CRIAR</span><h2>Ideias em movimento<span class="heading-dot">.</span></h2><p>Escolha seu ponto de partida e descubra algo novo.</p></div><a href="#/administracao" class="text-link">Ver trilhas de Administração ${icon('arrow')}</a></div><div class="discover-grid">${featured.map(item=>`<a href="#/${item.href}" class="discover-card"><div class="discover-image ${item.color}"><img src="${item.image}" alt="${esc(item.alt)}" width="1200" height="670" loading="lazy" decoding="async"><span class="discover-arrow">${icon('arrowUp')}</span></div><span class="discover-label ${item.color}">${item.label}</span><h3>${item.title}</h3><p>${item.desc}</p><span class="discover-meta">${item.meta} ${icon('arrow')}</span></a>`).join('')}</div><div class="area-chip-list" aria-label="Outras áreas de ferramentas"><span>Mais áreas</span>${categories.filter(cat=>!['matematica','estudos'].includes(cat.id)).map(cat=>`<a href="#/category/${cat.id}">${icon(categoryIcon(cat.id))} ${esc(cat.name)}</a>`).join('')}</div></section><aside class="home-agenda"><div class="home-agenda-heading"><span class="agenda-icon">${icon('calendar')}</span><a href="#/agenda" aria-label="Abrir agenda">${icon('arrowUp')}</a></div><span class="overline">ORGANIZE SEU TEMPO</span><h2>Seu próximo passo</h2><p>Seus compromissos em um só lugar.</p>${upcoming.length?`<div class="home-deadlines">${upcoming.map(item=>`<a href="${item.href}"><span class="deadline-date">${esc(fmtDate(item.date).replace(' de ', ' ').replace(/ de \d{4}$/, ''))}</span><span><strong>${esc(item.title)}</strong><small>${esc(item.date<localDate() && item.kind==='Tarefa'?'Tarefa atrasada':item.kind)}</small></span>${icon('arrowUp')}</a>`).join('')}</div><a href="#/agenda" class="text-link agenda-link">Ver minha agenda ${icon('arrow')}</a>`:`<div class="home-agenda-empty"><div class="empty-calendar-art">${icon('calendar')}<span>✳</span></div><strong>Uma página em branco.</strong><p>Adicione suas datas e tarefas para acompanhar tudo por aqui.</p><a href="#/tool/provas-trabalhos" class="text-link">Adicionar compromisso ${icon('arrow')}</a></div>`}<div class="home-agenda-footer">${icon('info')} Datas adicionadas por você, neste navegador.</div></aside></div>
+  <div class="home-content-grid"><section class="home-section discover-section"><div class="home-section-heading"><div><span class="overline">APRENDER, EXPERIMENTAR, CRIAR</span><h2>Ideias em movimento<span class="heading-dot">.</span></h2><p>Escolha seu ponto de partida e descubra algo novo.</p></div><a href="#/administracao" class="text-link">Ver trilhas de Administração ${icon('arrow')}</a></div><div class="discover-grid">${featured.map(item=>`<a href="#/${item.href}" class="discover-card"><div class="discover-image ${item.color}"><img src="${item.image}" alt="${esc(item.alt)}" width="1200" height="670" loading="lazy" decoding="async"><span class="discover-arrow">${icon('arrowUp')}</span></div><span class="discover-label ${item.color}">${item.label}</span><h3>${item.title}</h3><p>${item.desc}</p><span class="discover-meta">${item.meta} ${icon('arrow')}</span></a>`).join('')}</div><div class="area-chip-list" aria-label="Outras áreas de ferramentas"><span>Mais áreas</span>${categories.filter(cat=>!['matematica','estudos'].includes(cat.id)).map(cat=>`<a href="#/category/${cat.id}">${icon(categoryIcon(cat.id))} ${esc(cat.name)}</a>`).join('')}</div></section><aside class="home-agenda"><div class="home-agenda-heading"><span class="agenda-icon">${icon('calendar')}</span><a href="#/agenda" aria-label="Abrir agenda">${icon('arrowUp')}</a></div><span class="overline">ORGANIZE SEU TEMPO</span><h2>Seu próximo passo</h2><p>Seus compromissos em um só lugar.</p>${upcoming.length?`<div class="home-deadlines">${upcoming.map(item=>`<a href="${item.href}"><span class="deadline-date">${esc(fmtDate(item.date).replace(' de ', ' ').replace(/ de \d{4}$/, ''))}</span><span><strong>${esc(item.title)}</strong><small>${esc(item.date<localDate() && item.kind==='Tarefa'?'Tarefa atrasada':item.kind)}</small></span>${icon('arrowUp')}</a>`).join('')}</div><a href="#/agenda" class="text-link agenda-link">Ver minha agenda ${icon('arrow')}</a>`:`<div class="home-agenda-empty"><div class="empty-calendar-art">${icon('calendar')}<span>✳</span></div><strong>Uma página em branco.</strong><p>Adicione suas datas e tarefas para acompanhar tudo por aqui.</p><a href="#/tool/provas-trabalhos" class="text-link">Adicionar compromisso ${icon('arrow')}</a></div>`}<div class="home-agenda-footer">${icon('info')} Datas adicionadas por você, neste navegador.${dueCards?` <a href="#/flashcards">${dueCards} ${dueCards===1?'cartão para revisar':'cartões para revisar'}</a>.`:``}</div></aside></div>
   <section class="home-section continuity-section"><div class="home-section-heading"><div><span class="overline">SEU ESPAÇO, SEU TEMPO</span><h2>Continue de onde parou<span class="heading-dot">.</span></h2><p>Um pouco todo dia já é um ótimo começo.</p></div><a href="#/recent" class="text-link">Ver histórico ${icon('arrow')}</a></div><div class="continuity-content"><div class="continuity-illustration">${icon(recent?'clock':'spark')}<span>✳</span></div><div class="continuity-copy"><span class="overline">${recent?'ACESSADO RECENTEMENTE':'UM BOM COMEÇO'}</span><h3>${recent?esc(recent.name):'Seu próximo aprendizado começa aqui.'}</h3><p>${recent?esc(recent.description):'Explore as ferramentas e encontre um jeito de estudar que funciona para você.'}</p><a href="#/${recent?`tool/${recent.id}`:'catalog'}" class="button button-dark">${recent?'Continuar de onde parei':'Explorar ferramentas'} ${icon('arrow')}</a></div><div class="continuity-side"><span class="continuity-side-icon">${icon('heart')}</span><strong>${favorites.length?`${favorites.length} ${favorites.length===1?'favorito salvo':'favoritos salvos'}`:'Guarde suas descobertas'}</strong><p>${favorites.length?'Tudo o que você marcou, pertinho de você.':'Marque ferramentas para encontrá-las mais rápido.'}</p><a href="#/${favorites.length?'favorites':'catalog'}" class="text-link">${favorites.length?'Ver favoritos':'Encontrar ferramentas'} ${icon('arrow')}</a></div></div></section>
   <section class="community-strip"><div><span class="overline">FEITO PARA QUEM ESTÁ APRENDENDO</span><h2>Ideias boas crescem quando a gente coloca em prática.</h2><p>Apoio independente para estudantes da Escola Raphael Di Santo — Unidade Garcia.</p></div><a href="#/about" class="button button-quiet">Conheça o projeto ${icon('arrowUp')}</a></section>`;
 }
@@ -158,17 +173,17 @@ function recordsPage(tool) {
   const rows = records.slice().reverse().map(record => {
     const titleKey = ['titulo','tarefa','tema','produto','habito','atividade','prova'].find(key=>record[key]);
     const title = titleKey ? record[titleKey] : 'Registro';
-    const metadata = tool.fields.filter(field=>field.name!==titleKey && !['conteudo','forcas','fraquezas','oportunidades','ameacas'].includes(field.name) && record[field.name]!==undefined && record[field.name]!=='').map(field=>{
+    const metadata = tool.fields.filter(field=>field.name!==titleKey && !['conteudo','subtasks','forcas','fraquezas','oportunidades','ameacas'].includes(field.name) && record[field.name]!==undefined && record[field.name]!=='').map(field=>{
       const value = String(record[field.name]);
       const option = field.options?.find(item=>item.split('|')[0]===value)?.split('|')[1];
       return `${field.label.replace(' (opcional)','')}: ${option || (isValidDate(value)?fmtDate(value):value)}`;
     }).join(' · ');
     const done = Boolean(record.done);
-    return `<article class="record-row ${done?'record-done':''}"><div class="record-status">${tool.type==='board'?`<button class="check-button" data-action="toggle-record" data-record="${esc(record.id)}" aria-label="${done?'Reabrir':'Concluir'} tarefa" aria-pressed="${done}">${done?icon('check'):''}</button>`:'<span class="record-bullet"></span>'}</div><div class="record-main"><h3>${esc(title)}</h3>${record.conteudo?`<p>${esc(record.conteudo)}</p>`:''}${record.forcas?`<div class="swot-preview">${['forcas','fraquezas','oportunidades','ameacas'].map(k=>record[k]?`<span><b>${esc(k)}:</b> ${esc(record[k])}</span>`:'').join('')}</div>`:''}${metadata?`<small>${esc(metadata)}</small>`:''}</div><div class="record-actions"><button class="icon-button" data-action="edit-record" data-record="${esc(record.id)}" aria-label="Editar ${esc(title)}" title="Editar">${icon('edit')}</button><button class="icon-button danger-action" data-action="delete-record" data-record="${esc(record.id)}" aria-label="Excluir ${esc(title)}" title="Excluir">${icon('trash')}</button></div></article>`;
+    return `<article class="record-row ${done?'record-done':''}" data-record-id="${esc(record.id)}" tabindex="-1"><div class="record-status">${tool.type==='board'?`<button class="check-button" data-action="toggle-record" data-record="${esc(record.id)}" aria-label="${done?'Reabrir':'Concluir'} tarefa" aria-pressed="${done}">${done?icon('check'):''}</button>`:'<span class="record-bullet"></span>'}</div><div class="record-main"><h3>${esc(title)}</h3>${record.conteudo?`<p>${esc(record.conteudo)}</p>`:''}${record.forcas?`<div class="swot-preview">${['forcas','fraquezas','oportunidades','ameacas'].map(k=>record[k]?`<span><b>${esc(k)}:</b> ${esc(record[k])}</span>`:'').join('')}</div>`:''}${metadata?`<small>${esc(metadata)}</small>`:''}${tool.storage==='tasks' && record.materia?`<small>Matéria: ${esc(record.materia)}</small>`:''}${tool.storage==='tasks' && Array.isArray(record.steps) && record.steps.length?`<ul class="task-steps" aria-label="Subtarefas">${record.steps.filter(step=>step && typeof step.id==='string').map(step=>`<li><button type="button" data-action="toggle-subtask" data-record="${esc(record.id)}" data-step="${esc(step.id)}" aria-pressed="${Boolean(step.done)}">${step.done?'☑':'☐'} ${esc(step.text)}</button></li>`).join('')}</ul>`:''}</div><div class="record-actions">${tool.storage==='notes'?`<button class="text-button" type="button" data-action="note-to-card" data-record="${esc(record.id)}">Criar cartão</button>`:''}<button class="icon-button" data-action="edit-record" data-record="${esc(record.id)}" aria-label="Editar ${esc(title)}" title="Editar">${icon('edit')}</button><button class="icon-button danger-action" data-action="delete-record" data-record="${esc(record.id)}" aria-label="Excluir ${esc(title)}" title="Excluir">${icon('trash')}</button></div></article>`;
   }).join('');
   const timer = tool.type==='timer';
   return `<section class="tool-heading"><a class="back-link" href="#/category/${tool.category}">${icon('chevronLeft')} ${esc(categoryName(tool.category))}</a><div class="tool-heading-line"><div><span class="eyebrow">${esc(categoryName(tool.category))} <span class="eyebrow-divider">/</span> ${esc(labelType(tool.type))}</span><h1>${esc(tool.name)}</h1><p>${esc(tool.description)}</p></div>${favoriteButton(tool)}</div></section>
-  ${timer?`<section class="timer-panel"><span class="eyebrow">TEMPO DE FOCO</span><div id="timer-display" class="timer-display">${timerDisplay()}</div><div class="timer-controls"><label class="timer-input"><span>Duração em minutos</span><input id="timer-minutes" type="number" min="1" max="180" value="${currentTimer?.minutes||25}"></label><button class="button button-primary" data-action="timer-start">Iniciar sessão</button><button class="button button-quiet" data-action="timer-reset">Reiniciar</button></div><p>Deixe a página aberta durante a sessão. Não há notificações em segundo plano.</p></section>`:`<div class="records-layout"><form id="record-form" class="form-panel"><div class="panel-heading"><div><span class="eyebrow" id="record-form-eyebrow">NOVO REGISTRO</span><h2 id="record-form-title">Adicione ao seu espaço</h2></div><span class="step-number">01</span></div><div class="fields-grid">${tool.fields.map(fieldHTML).join('')}</div><input type="hidden" name="recordId"><div class="form-actions"><button type="submit" class="button button-primary" id="record-submit">Salvar registro ${icon('arrow')}</button><button type="reset" class="button button-quiet" data-action="cancel-edit">Limpar</button></div><p class="form-footnote">Salvo apenas neste navegador. Não inclua dados pessoais sensíveis.</p></form>
+  ${timer?`<section class="timer-panel"><span class="eyebrow">TEMPO DE FOCO</span><div id="timer-display" class="timer-display">${timerDisplay()}</div><div class="timer-controls"><label class="timer-input"><span>Duração em minutos</span><input id="timer-minutes" type="number" min="1" max="180" value="${currentTimer?.minutes||25}"></label><button class="button button-primary" data-action="timer-start">Iniciar sessão</button><button class="button button-quiet" data-action="timer-reset">Reiniciar</button></div><p>Deixe a página aberta durante a sessão. Não há notificações em segundo plano.</p></section>`:`<div class="records-layout"><form id="record-form" class="form-panel"><div class="panel-heading"><div><span class="eyebrow" id="record-form-eyebrow">NOVO REGISTRO</span><h2 id="record-form-title">Adicione ao seu espaço</h2></div><span class="step-number">01</span></div><div class="fields-grid">${tool.fields.map(fieldHTML).join('')}${['tasks','notes','school-dates'].includes(tool.storage)?subjectSelect(getRecords('subjects')):''}</div><input type="hidden" name="recordId"><div class="form-actions"><button type="submit" class="button button-primary" id="record-submit">Salvar registro ${icon('arrow')}</button><button type="reset" class="button button-quiet" data-action="cancel-edit">Limpar</button></div><p class="form-footnote">Salvo apenas neste navegador. Não inclua dados pessoais sensíveis.</p></form>
   <section class="records-panel"><div class="records-heading"><div><span class="eyebrow">SEU CONTEÚDO</span><h2>${records.length} ${records.length===1?'registro':'registros'}</h2></div>${records.length?`<button class="text-button" data-action="export-tool" data-id="${tool.id}">Exportar .json</button>`:''}</div><div class="records-list">${rows||`<div class="records-empty"><span class="empty-art">${icon('note')}</span><h3>Seu espaço começa aqui.</h3><p>Adicione o primeiro registro no formulário. Você poderá voltar e editar quando quiser.</p></div>`}</div></section></div>`}
   ${timer?'':`<div class="privacy-callout"><span class="privacy-dot"></span>Este conteúdo fica neste navegador e pode ser visto por quem usa o mesmo perfil. Exporte uma cópia quando precisar.</div>`}`;
 }
@@ -177,7 +192,12 @@ function toolPage(tool) {
   return tool.type==='calculator'?calculatorPage(tool):recordsPage(tool);
 }
 function settingsPage() {
-  return `<section class="page-intro"><div><span class="eyebrow">PREFERÊNCIAS</span><h1>Configurações</h1><p>Personalize sua experiência e controle seus dados locais.</p></div></section><div class="settings-list"><section class="settings-item"><div><span class="eyebrow">APARÊNCIA</span><h2>Tema da plataforma</h2><p>Escolha como o Help RDS aparece neste dispositivo.</p></div><div class="segmented-control"><button data-action="set-theme" data-value="light" class="${prefs.theme==='light'?'selected':''}" aria-pressed="${prefs.theme==='light'}">Claro</button><button data-action="set-theme" data-value="dark" class="${prefs.theme==='dark'?'selected':''}" aria-pressed="${prefs.theme==='dark'}">Escuro</button></div></section><section class="settings-item"><div><span class="eyebrow">SEUS DADOS</span><h2>Armazenamento local</h2><p>Favoritos, histórico e registros de ferramentas ficam somente neste navegador, mesmo com login. Quem usa o mesmo perfil também pode acessá-los; a conta não sincroniza nem protege esses dados. Não há backup automático.</p></div><button class="button button-quiet" data-action="export-all">Exportar meus dados</button></section><section class="settings-item settings-danger"><div><span class="eyebrow">PRIVACIDADE</span><h2>Apagar dados deste dispositivo</h2><p>Remove favoritos, histórico, preferências e registros salvos no Help RDS neste navegador. Esta ação não pode ser desfeita.</p></div><button class="button button-danger" data-action="clear-data">Apagar dados locais</button></section><p class="settings-note">Em dispositivo compartilhado, saia da conta, exporte o que deseja guardar e limpe seus dados locais. Apagar dados locais não encerra a sessão.</p></div>`;
+  return `<section class="page-intro"><div><span class="eyebrow">PREFERÊNCIAS</span><h1>Configurações</h1><p>Personalize sua experiência e controle seus dados locais.</p></div></section><div class="settings-list">
+  <section class="settings-item"><div><span class="eyebrow">APARÊNCIA</span><h2>Tema da plataforma</h2><p>Escolha como o Help RDS aparece neste dispositivo.</p></div><div class="segmented-control"><button data-action="set-theme" data-value="light" class="${prefs.theme==='light'?'selected':''}" aria-pressed="${prefs.theme==='light'}">Claro</button><button data-action="set-theme" data-value="dark" class="${prefs.theme==='dark'?'selected':''}" aria-pressed="${prefs.theme==='dark'}">Escuro</button></div></section>
+  <section class="settings-item"><div><span class="eyebrow">SEUS DADOS</span><h2>Armazenamento local</h2><p>Favoritos, histórico e registros ficam neste navegador, mesmo com login. A conta não sincroniza nem protege esses dados. Não há backup automático.</p></div><button class="button button-quiet" data-action="export-all">Exportar meus dados</button></section>
+  <section class="settings-item settings-import"><div><span class="eyebrow">CÓPIA DE SEGURANÇA</span><h2>Restaurar dados</h2><p>Selecione um backup do Help RDS. Ele será lido neste dispositivo. Exporte uma cópia atual e feche outras abas antes de importar. A restauração entre grupos não é transacional; uma falha pode impedir a recuperação.</p></div><form id="backup-form"><label class="field"><span>Arquivo JSON (até 10 MB)</span><input type="file" name="backup" accept=".json,application/json" required></label><label class="field"><span>Tipo de arquivo</span><select name="collection"><option value="">Backup completo do Help RDS</option>${tools.filter(tool=>tool.storage && tool.type!=='timer').map(tool=>`<option value="records:${esc(tool.storage)}">Exportação individual: ${esc(tool.name)}</option>`).join('')}</select><small>Se o arquivo foi exportado por uma ferramenta, escolha a ferramenta de origem; não é possível identificá-la automaticamente.</small></label><label class="field"><span>Como importar</span><select name="mode"><option value="merge">Mesclar sem sobrescrever registros existentes</option><option value="replace">Substituir grupos presentes no arquivo</option></select></label><button type="submit" class="button button-quiet">Ver prévia da importação</button><div id="backup-preview" role="status" aria-live="polite"></div></form></section>
+  <section class="settings-item offline-settings"><div><span class="eyebrow">OPCIONAL · NESTE DISPOSITIVO</span><h2>Acesso offline</h2><p>Prepare uma cópia dos arquivos públicos do aplicativo enquanto estiver conectado. Os dados continuam apenas neste navegador; isso não é sincronização nem backup. O navegador pode remover a cópia. O login Google e os links externos exigem internet.</p></div><div><p id="offline-status" role="status">Verificando disponibilidade…</p><div class="offline-actions"><button type="button" class="button button-quiet" data-action="offline-enable" disabled>Preparar acesso offline</button><button type="button" class="button button-quiet" data-action="offline-disable" hidden>Remover cópia offline</button></div></div></section>
+  <section class="settings-item settings-danger"><div><span class="eyebrow">PRIVACIDADE</span><h2>Apagar dados deste dispositivo</h2><p>Remove favoritos, histórico, preferências e registros salvos no Help RDS neste navegador. Esta ação não pode ser desfeita.</p></div><button class="button button-danger" data-action="clear-data">Apagar dados locais</button></section><p class="settings-note">Em dispositivo compartilhado, saia da conta, exporte o que deseja guardar e limpe seus dados locais. Apagar dados locais não encerra a sessão. <a href="#/privacidade">Entenda a privacidade e a conta</a>.</p></div>`;
 }
 function aboutPage() {
  return `<section class="about-hero"><span class="eyebrow">SOBRE O PROJETO</span><h1>Aprender também é<br><em>ter as ferramentas certas.</em></h1><p>Help RDS é uma plataforma independente de apoio a estudantes do Ensino Médio Técnico em Administração da Escola Raphael Di Santo — Unidade Garcia. Um espaço para praticar, organizar ideias e aprender fazendo.</p></section><section class="about-columns"><article><span class="eyebrow">NOSSO PROPÓSITO</span><h2>Útil no dia a dia.<br>Claro para aprender.</h2><p>Calculadoras didáticas, organizadores e recursos para apoiar a vida escolar e os estudos técnicos. As ferramentas funcionam no navegador e os dados criados ficam neste dispositivo.</p></article><article class="credits-details"><span class="eyebrow">CRÉDITOS E RESPONSABILIDADES</span><div class="credit-group"><span class="eyebrow">PROGRAMAÇÃO</span><h3>Ytalo Lima</h3><p>Desenvolvimento, implementação técnica, integração dos materiais de design, testes e manutenção.</p></div><div class="credit-group"><span class="eyebrow">EQUIPE DE DESIGN</span><h3>Pedro Miranda · Matheus Gama</h3><p>Direção visual, identidade, linguagem gráfica, layouts, componentes e orientações de UX/UI.</p></div><p class="design-note">A divisão de tarefas individuais entre Pedro Miranda e Matheus Gama cabe à própria equipe. A proposta visual atual é independente e não representa materiais oficiais aprovados pela escola ou pela equipe de design.</p></article></section><section class="about-disclaimer"><span class="eyebrow">USO RESPONSÁVEL</span><h2>Aprendizado, não aconselhamento profissional.</h2><p>Os cálculos tributários, financeiros e de RH são exercícios educacionais e usam valores informados pelo estudante. Não são consultoria fiscal, jurídica, contábil ou financeira. Verifique fontes oficiais e consulte profissionais para decisões reais.</p><p>Ferramenta independente de apoio aos estudos, sem vínculo ou representação oficial da escola. Não insira informações pessoais sensíveis. Os registros de estudo não são enviados para o servidor; quem usa o mesmo perfil do navegador pode acessá-los. Se você usar uma conta, seu e-mail e os dados necessários à autenticação são enviados ao Supabase.</p></section>`;
@@ -198,14 +218,17 @@ function rememberTool(tool) {
   updatePrefs();
 }
 let lastRenderedRoute = '';
+let lastRenderedHash = '';
 function render() {
   const currentRoute = route();
+  if (currentRoute === 'biblioteca' && location.hash !== lastRenderedHash && location.hash.includes('?item=')) libraryFilters = { query:'', type:'', sort:'recent', favorites:false };
   if (lastRenderedRoute !== currentRoute) {
     currentResult = null;
     businessPreview = null;
     if (currentRoute === 'biblioteca') libraryFilters = { query:'', type:'', sort:'recent', favorites:false };
   }
   lastRenderedRoute = currentRoute;
+  lastRenderedHash = location.hash;
   const parts = currentRoute.split('/');
   const page = parts[0];
   let content, active = page, title = 'Início';
@@ -221,26 +244,34 @@ function render() {
   }
   else if (page === 'materias') {
     title = 'Minhas matérias'; active = 'materias';
-    if (parts[1]) { let id = ''; try { id = decodeURIComponent(parts[1]); } catch {} const subject = getRecords('subjects').find(item => item.id === id); title = subject?.name || 'Matéria'; content = subjectPage(subject, getRecords('notes'), getRecords('library'), getRecords('flashcards')); }
+    if (parts[1]) { let id = ''; try { id = decodeURIComponent(parts[1]); } catch {} const subject = getRecords('subjects').find(item => item.id === id); title = subject?.name || 'Matéria'; content = subjectPage(subject, getRecords('notes'), getRecords('library'), getRecords('flashcards'), getRecords('subjects'), getRecords('tasks'), getRecords('school-dates')); }
     else content = subjectsPage(getRecords('subjects'));
   }
   else if (page === 'vida-escolar') { title = 'Vida escolar'; content = schoolPage({subjects:getRecords('subjects'), tasks:getRecords('tasks'), dates:getDeadlines(), cards:getRecords('flashcards'), library:getRecords('library')}); }
   else if (page === 'administracao') { title = parts[1] ? (findLesson(parts[1])?.title || 'Trilha de Administração') : 'Administração'; active = 'administracao'; content = parts[1] ? adminLessonPage(findLesson(parts[1]), getRecords('admin-progress'), getRecords('admin-attempts')) : adminPage(getRecords('admin-progress'), getRecords('admin-attempts')); }
   else if (page === 'laboratorio') { title = 'Laboratório empresarial'; content = labPage(getRecords('business-scenarios'), getDraft('admin-lab'), businessPreview); }
   else if (page === 'carreira') { title = 'Meu futuro'; content = careerPage(getRecords('career-progress')); }
-  else if (page === 'agenda') { title = 'Agenda'; content = agendaPage(getDeadlines(), calendarView); }
-  else if (page === 'biblioteca') { title = 'Biblioteca'; content = libraryPage(getRecords('library'), libraryFilters); }
-  else if (page === 'flashcards') { title = 'Flashcards'; content = flashcardsPage(getRecords('flashcards'), flashState); }
+  else if (page === 'agenda') { title = 'Agenda'; content = agendaPage(getDeadlines(), calendarView, selectedDay); }
+  else if (page === 'biblioteca') { title = 'Biblioteca'; content = libraryPage(getRecords('library'), libraryFilters, getRecords('subjects')); }
+  else if (page === 'flashcards') { title = 'Flashcards'; content = flashcardsPage(getRecords('flashcards'), flashState, getRecords('subjects'), getReviewSettings()); }
   else if (page === 'tecnologia') { title = parts[1] ? (findGuide(parts[1])?.title || 'Tecnologia') : 'Tecnologia'; content = parts[1] ? guidePage(findGuide(parts[1])) : technologyPage(); active = 'tecnologia'; }
-  else if (page === 'busca') { title = 'Busca'; content = searchResultsPage(searchQuery, searchItems(searchQuery)); }
+  else if (page === 'busca') { title = 'Busca'; content = searchResultsPage(searchQuery, filteredSearchItems(searchQuery), searchType); }
   else if (page === 'conta') { title = 'Minha conta'; content = accountPage({ ...authState, notice: authState.notice?.route === currentRoute ? authState.notice : null }); }
   else if (page === 'settings') { title = 'Configurações'; content = settingsPage(); }
+  else if (page === 'privacidade') { title = 'Privacidade'; content = privacyPage(import.meta.env.VITE_PRIVACY_CONTACT_EMAIL); }
   else if (page === 'about') { title = 'Sobre o projeto'; content = aboutPage(); }
   else { title = 'Página não encontrada'; content = emptyState('Esta página não foi encontrada.', 'Confira o endereço ou volte para explorar as ferramentas.'); }
   app.innerHTML = shell(content, active, title);
   document.documentElement.dataset.theme = prefs.theme;
   document.body.dataset.page = page;
   bindPageEvents();
+  if (page === 'flashcards' && pendingFlashDraft) {
+    const form = document.querySelector('#flashcard-form');
+    for (const [key,value] of Object.entries(pendingFlashDraft)) { const input = form?.elements.namedItem(key); if (input) input.value = value; }
+    pendingFlashDraft = null;
+    form?.querySelector('[name="question"]')?.focus({ preventScroll:true });
+    toast('Escreva a pergunta e revise a resposta antes de salvar.');
+  }
   if (currentResult && page === 'tool') {
     const tool = findTool(parts[1]);
     const panel = document.querySelector('#result-panel');
@@ -369,7 +400,62 @@ async function initializeAccount() {
   }
 }
 
+async function updateOfflineStatus() {
+  const statusNode = document.querySelector('#offline-status');
+  if (!statusNode) return;
+  const enable = document.querySelector('[data-action="offline-enable"]');
+  const disable = document.querySelector('[data-action="offline-disable"]');
+  if (import.meta.env.DEV) { statusNode.textContent = 'Disponível somente na versão de produção compilada.'; return; }
+  try {
+    const status = await offlineStatus();
+    if (!statusNode.isConnected) return;
+    if (status === 'unsupported') { statusNode.textContent = 'Acesso offline não disponível neste navegador ou contexto.'; return; }
+    statusNode.textContent = status === 'ready' ? 'Cópia offline preparada neste navegador.' : 'Cópia offline ainda não preparada.';
+    enable.hidden = status === 'ready'; enable.disabled = false; disable.hidden = status !== 'ready';
+  } catch { if (statusNode.isConnected) statusNode.textContent = 'Não foi possível verificar o acesso offline.'; }
+}
 function bindPageEvents() {
+  updateOfflineStatus();
+  const backupForm = document.querySelector('#backup-form');
+  if (backupForm) {
+    let revision = 0;
+    const invalidate = () => { revision++; restorePlan = null; const preview = document.querySelector('#backup-preview'); if (preview) preview.textContent = ''; };
+    backupForm.elements.namedItem('backup').addEventListener('change', invalidate);
+    backupForm.elements.namedItem('mode').addEventListener('change', invalidate);
+    backupForm.elements.namedItem('collection').addEventListener('change', invalidate);
+    backupForm.addEventListener('submit', async event => {
+      event.preventDefault(); invalidate();
+      const preview = document.querySelector('#backup-preview');
+      const file = backupForm.elements.namedItem('backup').files?.[0];
+      const mode = backupForm.elements.namedItem('mode').value;
+      const collection = backupForm.elements.namedItem('collection').value;
+      const reading = revision;
+      if (!file || file.size > MAX_BACKUP_BYTES) { preview.textContent = 'Escolha um arquivo JSON de até 10 MB.'; return; }
+      try {
+        const parsed = parseBackup(await file.text(), collection);
+        if (!backupForm.isConnected || reading !== revision || file !== backupForm.elements.namedItem('backup').files?.[0] || mode !== backupForm.elements.namedItem('mode').value || collection !== backupForm.elements.namedItem('collection').value) return;
+        restorePlan = prepareRestore(parsed, window.localStorage, mode);
+        const summary = restorePlan.mode === 'replace' ? 'Substituir somente os grupos presentes no arquivo' : 'Mesclar sem substituir registros existentes';
+        const groups = restorePlan.changes.map(change => { const key = change.key.slice('help-rds:'.length); return tools.find(tool=>`records:${tool.storage}`===key)?.name || key; });
+        preview.innerHTML = `<p><strong>${summary}.</strong> ${restorePlan.changes.length} grupo(s) a alterar; ${restorePlan.added} item(ns) no arquivo a importar; ${restorePlan.kept} item(ns) mantidos por já existirem. ${restorePlan.skipped.length ? `${restorePlan.skipped.length} grupo(s) desconhecidos serão ignorados.` : ''}</p>${groups.length?`<p>Grupos afetados: ${groups.map(esc).join(', ')}.</p>`:''}${restorePlan.changes.length ? '<button type="button" class="button button-primary" data-action="apply-backup">Importar dados</button>' : '<p>Nenhuma alteração necessária.</p>'}`;
+      } catch (error) { if (reading === revision && backupForm.isConnected) { restorePlan = null; preview.textContent = error.message || 'Não foi possível ler o arquivo.'; } }
+    });
+  }
+  const reviewFilter = document.querySelector('#review-filter');
+  if (reviewFilter) reviewFilter.addEventListener('submit', event => {
+    event.preventDefault();
+    const data = new FormData(reviewFilter);
+    flashState = { ...flashState, subject:String(data.get('subject') || ''), topic:String(data.get('topic') || '').trim().slice(0,80), completed:[], revealed:false };
+    renderFlashReview('#review-filter select');
+  });
+  const reviewSettings = document.querySelector('#review-settings-form');
+  if (reviewSettings) reviewSettings.addEventListener('submit', event => {
+    event.preventDefault();
+    const data = new FormData(reviewSettings);
+    const values = Object.fromEntries(['dificil','medio','facil'].map(key => [key, Number(data.get(key))]));
+    if (!saveReviewSettings(values)) { toast('Informe intervalos inteiros entre 1 e 365 dias e confira o armazenamento.'); return; }
+    renderFlashReview('.review-settings summary'); toast('Intervalos de revisão salvos neste navegador.');
+  });
   const accountForm = document.querySelector('#account-form');
   if (accountForm) accountForm.addEventListener('submit', handleAccountSubmit);
   const form = document.querySelector('#calculator-form');
@@ -402,13 +488,18 @@ function bindPageEvents() {
     const tool = findTool(route().split('/')[1]);
     const data = Object.fromEntries(new FormData(recordForm));
     const id = data.recordId; delete data.recordId;
-    const cleaned = Object.fromEntries(Object.entries(data).map(([key,value]) => [key, String(value).trim()]));
+    let cleaned = Object.fromEntries(Object.entries(data).map(([key,value]) => [key, String(value).trim()]));
     const missing = tool.fields.find(field => field.required && !cleaned[field.name]);
     if (missing) { toast(`Preencha o campo ${missing.label}.`); recordForm.elements.namedItem(missing.name)?.focus(); return; }
     const records = getRecords(tool.storage);
+    const previous = id ? records.find(item => item.id === id) : null;
+    if (id && !previous) { toast('Este registro não foi encontrado.'); return; }
+    try {
+      if (['tasks','notes','school-dates'].includes(tool.storage)) cleaned = attachSubject(cleaned, 'materia', getRecords('subjects'));
+      if (tool.storage === 'tasks') { cleaned.steps = reconcileSteps(cleaned.subtasks, previous?.steps, makeId); delete cleaned.subtasks; }
+    } catch (error) { toast(error.message); return; }
     if (id) {
       const index = records.findIndex(item => item.id === id);
-      if (index < 0) { toast('Este registro não foi encontrado.'); return; }
       records[index] = { ...records[index], ...cleaned, updated:Date.now() };
     } else records.push({ id:makeId(), ...cleaned, created:Date.now(), done:false });
     if (!saveCollection(tool.storage, records)) return;
@@ -427,7 +518,7 @@ function bindPageEvents() {
     if (id) {
       const index = records.findIndex(item => item.id === id);
       if (index < 0) { error.textContent = 'Esta matéria não foi encontrada.'; return; }
-      records[index] = { ...records[index], ...cleaned, updated:Date.now() };
+      records[index] = updateSubject(records[index], cleaned, records);
     } else records.push({ id:makeId(), ...cleaned, created:Date.now() });
     if (!saveCollection('subjects', records)) return;
     render(); toast(id ? 'Matéria atualizada.' : 'Matéria salva neste navegador.');
@@ -444,6 +535,7 @@ function bindPageEvents() {
     const records = getRecords('library');
     if (records.some(item => item.id !== id && canonicalUrl(item.url) === canonicalUrl(url))) { error.textContent = 'Este link já está na sua biblioteca. Edite a referência existente.'; return; }
     cleaned.url = url;
+    try { Object.assign(cleaned, attachSubject(cleaned, 'subject', getRecords('subjects'))); } catch (problem) { error.textContent = problem.message; return; }
     if (id) {
       const index = records.findIndex(item => item.id === id);
       if (index < 0) { error.textContent = 'Esta referência não foi encontrada.'; return; }
@@ -461,6 +553,7 @@ function bindPageEvents() {
     const error = document.querySelector('#flashcard-error');
     if (!cleaned.question || !cleaned.answer) { error.textContent = 'Escreva uma pergunta e uma resposta.'; return; }
     if (!['facil','medio','dificil'].includes(cleaned.difficulty)) { error.textContent = 'Escolha uma dificuldade válida.'; return; }
+    try { Object.assign(cleaned, attachSubject(cleaned, 'subject', getRecords('subjects'))); } catch (problem) { error.textContent = problem.message; return; }
     const records = getRecords('flashcards');
     if (id) {
       const index = records.findIndex(item => item.id === id);
@@ -471,20 +564,21 @@ function bindPageEvents() {
     flashState.completed = []; flashState.revealed = false;
     render(); toast(id ? 'Cartão atualizado.' : 'Cartão salvo neste navegador.');
   });
-  const quizForm = document.querySelector('#admin-quiz');
-  if (quizForm) quizForm.addEventListener('submit', event => {
+  document.querySelectorAll('#admin-quiz, #admin-quiz-extra').forEach(quizForm => quizForm.addEventListener('submit', event => {
     event.preventDefault();
+    const feedback = quizForm.querySelector('#quiz-feedback, .quiz-extra-feedback');
     try {
       const lessonId = quizForm.dataset.lesson;
+      const exerciseId = quizForm.dataset.exercise || 'principal';
       const answer = new FormData(quizForm).get('answer');
-      const outcome = gradeLesson(lessonId, answer);
-      const records = getRecords('admin-attempts').filter(item => item.lessonId !== lessonId);
-      const saved = saveCollection('admin-attempts', [...records, { id:makeId(), lessonId, answer, correct:outcome.correct, created:Date.now() }]);
-      document.querySelector('#quiz-feedback').innerHTML = renderQuizFeedback(outcome);
+      const outcome = gradeLesson(lessonId, answer, exerciseId);
+      const records = getRecords('admin-attempts').filter(item => item.lessonId !== lessonId || (item.exerciseId || 'principal') !== exerciseId);
+      const saved = saveCollection('admin-attempts', [...records, { id:makeId(), lessonId, exerciseId, answer, correct:outcome.correct, created:Date.now() }]);
+      feedback.innerHTML = renderQuizFeedback(outcome);
       const previous = quizForm.querySelector('.attempt-note');
       if (previous) previous.textContent = saved ? `Última tentativa neste navegador: ${outcome.correct ? 'resposta correta' : 'continue praticando'}.` : 'Não foi possível salvar esta tentativa.';
-    } catch (error) { document.querySelector('#quiz-feedback').textContent = error.message; }
-  });
+    } catch (error) { feedback.textContent = error.message; }
+  }));
   const businessForm = document.querySelector('#business-form');
   if (businessForm) {
     businessForm.addEventListener('input', () => {
@@ -523,6 +617,7 @@ function bindPageEvents() {
   });
   ['#category-filter','#type-filter','#purpose-filter','#sort-filter'].forEach(selector => document.querySelector(selector)?.addEventListener('change', applyFilters));
   ['#library-type-filter','#library-sort','#library-favorites'].forEach(selector => document.querySelector(selector)?.addEventListener('change', updateLibraryFilters));
+  document.querySelector('#search-type-filter')?.addEventListener('change', event => { searchType = event.target.value; const target = document.querySelector('#search-page-results'); if (target) target.innerHTML = searchResultsList(searchQuery, filteredSearchItems(searchQuery)); });
 }
 
 function applyFilters() {
@@ -548,7 +643,7 @@ function updateLibraryFilters() {
   if (result) result.innerHTML = libraryResults(getRecords('library'), libraryFilters);
 }
 
-function searchItems(query) {
+function searchItems(query, type = 'all') {
   const term = normalize(query);
   if (!term) return [];
   const items = [
@@ -560,21 +655,25 @@ function searchItems(query) {
     { title:'Laboratório empresarial', type:'Recurso', detail:'Simulação de cenários fictícios', href:'#/laboratorio', icon:'calculator', terms:'empresa simulação preço custos resultado equilíbrio comparar' },
     { title:'Meu futuro', type:'Recurso', detail:'Desenvolvimento profissional e projetos', href:'#/carreira', icon:'target', terms:'carreira habilidades competências futuro profissional' },
     { title:'Vida escolar', type:'Recurso', detail:'Organização e recursos de estudo', href:'#/vida-escolar', icon:'book', terms:'estudo rotina matérias agenda tarefas' },
-    ...getRecords('business-scenarios').map(item => ({ title:item.name || 'Cenário sem nome', type:'Cenário pessoal', detail:'Simulação salva neste navegador', href:'#/laboratorio', icon:'chart', terms:'empresa laboratório negócio cenário' })),
+    ...getRecords('business-scenarios').map(item => ({ title:item.name || 'Cenário sem nome', type:'Cenário pessoal', detail:'Simulação salva neste navegador', href:detailHref('laboratorio', item.id), icon:'chart', terms:'empresa laboratório negócio cenário' })),
     { title:'Minhas matérias', type:'Recurso', detail:'Espaços de estudo cadastrados por você', href:'#/materias', icon:'book', terms:'disciplinas matérias' },
     { title:'Minha biblioteca', type:'Recurso', detail:'Referências de estudo neste navegador', href:'#/biblioteca', icon:'library', terms:'materiais links pdf' },
     { title:'Agenda de estudos', type:'Recurso', detail:'Calendário pessoal', href:'#/agenda', icon:'calendar', terms:'calendário provas trabalhos datas' },
     { title:'Flashcards', type:'Recurso', detail:'Cartões de revisão', href:'#/flashcards', icon:'cards', terms:'cartões revisão memorizar' },
     ...getRecords('subjects').map(item => ({ title:item.name || 'Matéria', type:'Matéria pessoal', detail:[item.year,item.className,item.period].filter(Boolean).join(' · ') || 'Salva neste navegador', href:`#/materias/${encodeURIComponent(String(item.id))}`, icon:'book', terms:item.description || '' })),
-    ...getRecords('notes').map(item => ({ title:item.titulo || 'Anotação', type:'Anotação pessoal', detail:'Salva neste navegador', href:'#/tool/anotacoes', icon:'note', terms:`${item.categoria || ''} ${item.materia || ''} ${item.conteudo || ''}` })),
-    ...getRecords('tasks').map(item => ({ title:item.titulo || 'Tarefa', type:'Tarefa pessoal', detail:item.prazo ? `Prazo: ${fmtDate(item.prazo)}` : 'Sem prazo informado', href:'#/tool/lista-tarefas', icon:'list', terms:item.prazo || '' })),
-    ...getRecords('school-dates').map(item => ({ title:item.titulo || 'Compromisso', type:'Data pessoal', detail:fmtDate(item.data), href:'#/tool/provas-trabalhos', icon:'calendar', terms:item.materia || '' })),
-    ...getRecords('projects').map(item => ({ title:item.tarefa || 'Projeto', type:'Projeto pessoal', detail:'Salvo neste navegador', href:'#/tool/projetos', icon:'layers', terms:`${item.status || ''} ${item.responsavel || ''}` })),
-    ...getRecords('library').map(item => ({ title:item.title || 'Referência', type:'Referência pessoal', detail:item.subject || 'Salva neste navegador', href:'#/biblioteca', icon:'library', terms:`${item.period || ''} ${item.tags || ''} ${item.type || ''}` })),
-    ...getRecords('flashcards').map(item => ({ title:item.question || 'Flashcard', type:'Flashcard pessoal', detail:item.subject || 'Salvo neste navegador', href:'#/flashcards', icon:'cards', terms:`${item.answer || ''} ${item.topic || ''}` })),
+    ...getRecords('notes').map(item => ({ title:item.titulo || 'Anotação', type:'Anotação pessoal', detail:'Salva neste navegador', href:detailHref('tool/anotacoes', item.id), icon:'note', terms:`${item.categoria || ''} ${item.materia || ''} ${item.conteudo || ''}` })),
+    ...getRecords('tasks').map(item => ({ title:item.titulo || 'Tarefa', type:'Tarefa pessoal', detail:item.prazo ? `Prazo: ${fmtDate(item.prazo)}` : 'Sem prazo informado', href:detailHref('tool/lista-tarefas', item.id), icon:'list', terms:item.prazo || '' })),
+    ...getRecords('school-dates').map(item => ({ title:item.titulo || 'Compromisso', type:'Data pessoal', detail:fmtDate(item.data), href:detailHref('tool/provas-trabalhos', item.id), icon:'calendar', terms:item.materia || '' })),
+    ...getRecords('projects').map(item => ({ title:item.tarefa || 'Projeto', type:'Projeto pessoal', detail:'Salvo neste navegador', href:detailHref('tool/projetos', item.id), icon:'layers', terms:`${item.status || ''} ${item.responsavel || ''}` })),
+    ...getRecords('library').map(item => ({ title:item.title || 'Referência', type:'Referência pessoal', detail:item.subject || 'Salva neste navegador', href:detailHref('biblioteca', item.id), icon:'library', terms:`${item.period || ''} ${item.tags || ''} ${item.type || ''}` })),
+    ...getRecords('flashcards').map(item => ({ title:item.question || 'Flashcard', type:'Flashcard pessoal', detail:item.subject || 'Salvo neste navegador', href:detailHref('flashcards', item.id), icon:'cards', terms:`${item.answer || ''} ${item.topic || ''}` })),
   ];
-  return items.filter(item => normalize(`${item.title} ${item.detail} ${item.type} ${item.terms || ''}`).includes(term)).sort((a,b) => Number(!normalize(a.title).includes(term)) - Number(!normalize(b.title).includes(term))).slice(0, 100);
+  return items.filter(item => normalize(`${item.title} ${item.detail} ${item.type} ${item.terms || ''}`).includes(term) && matchesSearchType(item, type)).sort((a,b) => Number(!normalize(a.title).includes(term)) - Number(!normalize(b.title).includes(term))).slice(0, 100);
 }
+function matchesSearchType(item, type) {
+  return type === 'all' || (type === 'personal' && item.type.toLowerCase().includes('pessoal')) || (type === 'guides' && (item.type.includes('Guia') || item.type.includes('Trilha'))) || (type === 'tools' && ['Ferramenta','Área de ferramentas','Recurso'].includes(item.type));
+}
+function filteredSearchItems(query) { return searchItems(query, searchType); }
 function showGlobalSearch(input) {
   document.querySelector('.search-results')?.remove();
   const query = input.value.trim();
@@ -622,6 +721,7 @@ function renderFlashReview(focusSelector = '') {
 function editForm(form, record, kind) {
   if (!form || !record) return;
   Object.entries(record).forEach(([key,value]) => { const input = form.elements.namedItem(key); if (input) input.value = value; });
+  if (kind === 'record' && form.elements.namedItem('subtasks')) form.elements.namedItem('subtasks').value = Array.isArray(record.steps) ? record.steps.map(step => step.text).join('\n') : '';
   form.elements.namedItem('recordId').value = record.id;
   if (kind === 'record') {
     document.querySelector('#record-form-title').textContent = 'Editar registro';
@@ -683,6 +783,7 @@ app.addEventListener('click', async event => {
       element.setAttribute('aria-label', `${active?'Remover dos':'Adicionar aos'} favoritos`); element.title = `${active?'Remover dos':'Adicionar aos'} favoritos`;
     });
   }
+  if (action === 'dismiss-guide') { if (saveOnboarding()) { render(); document.querySelector('#main-content')?.focus({preventScroll:true}); } else toast('Não foi possível salvar a preferência neste navegador.'); }
   if (action === 'theme') setTheme(prefs.theme === 'dark' ? 'light' : 'dark');
   if (action === 'set-theme') setTheme(button.dataset.value);
   if (action === 'menu') {
@@ -706,6 +807,16 @@ app.addEventListener('click', async event => {
     const tool = findTool(route().split('/')[1]);
     if (saveCollection(tool.storage, getRecords(tool.storage).filter(item => item.id !== button.dataset.record))) { render(); toast('Registro excluído.'); }
   }
+  if (action === 'toggle-subtask') {
+    const records = getRecords('tasks').map(item => item.id === button.dataset.record ? { ...item, steps:(Array.isArray(item.steps) ? item.steps : []).map(step => step && step.id === button.dataset.step ? { ...step, done:!step.done } : step) } : item);
+    if (saveCollection('tasks', records)) { render(); toast('Subtarefa atualizada.'); }
+  }
+  if (action === 'note-to-card') {
+    const note = getRecords('notes').find(item => item.id === button.dataset.record);
+    if (!note) return;
+    pendingFlashDraft = { answer:String(note.conteudo || '').slice(0, 2000), subject:String(note.materia || '').slice(0,80), subjectId:note.subjectId || '' };
+    path('flashcards');
+  }
   if (action === 'toggle-record') {
     const tool = findTool(route().split('/')[1]);
     if (saveCollection(tool.storage, getRecords(tool.storage).map(item => item.id === button.dataset.record ? { ...item, done:!item.done } : item))) { render(); toast('Tarefa atualizada.'); }
@@ -716,7 +827,30 @@ app.addEventListener('click', async event => {
   }
   if (action === 'cancel-edit') resetFormHeading('record');
   if (action === 'export-tool') { const tool = findTool(button.dataset.id); downloadJSON(`${tool.storage}.json`, getRecords(tool.storage)); }
-  if (action === 'export-all') downloadJSON('help-rds-dados-locais.json', exportLocalData());
+  if (action === 'export-all') downloadJSON('help-rds-dados-locais.json', makeBackup(exportLocalData()));
+  if (action === 'apply-backup' && restorePlan) {
+    const plan = restorePlan;
+    const mode = plan.mode;
+    const description = mode === 'replace' ? 'Os grupos presentes no arquivo substituirão os atuais. Os demais grupos não serão apagados. Exporte uma cópia antes de continuar.' : 'Itens com o mesmo identificador serão mantidos como estão. Exporte uma cópia antes de continuar.';
+    if (!await confirmAction('Importar dados locais?', description, 'Importar')) return;
+    if (restorePlan !== plan) { toast('A prévia mudou. Revise o arquivo novamente.'); return; }
+    try {
+      const count = applyRestore(plan, window.localStorage);
+      restorePlan = null; prefs = getPrefs(); businessPreview = null;
+      render(); toast(`${count} grupo(s) importado(s) neste navegador.`);
+    } catch (error) { restorePlan = null; const preview = document.querySelector('#backup-preview'); if (preview) preview.textContent = error.message; }
+  }
+  if (action === 'offline-enable') {
+    button.disabled = true;
+    const status = document.querySelector('#offline-status');
+    if (status) status.textContent = 'Preparando cópia offline…';
+    try { await enableOffline(); await updateOfflineStatus(); toast('Cópia offline preparada.'); }
+    catch (error) { if (status?.isConnected) status.textContent = error.message || 'Não foi possível preparar a cópia.'; button.disabled = false; }
+  }
+  if (action === 'offline-disable') {
+    if (!await confirmAction('Remover a cópia offline?', 'Os arquivos públicos em cache serão removidos. Seus dados locais não serão apagados.', 'Remover cópia')) return;
+    try { await disableOffline(); location.reload(); } catch (error) { toast(error.message || 'Não foi possível remover a cópia.'); }
+  }
   if (action === 'clear-data') {
     if (!await confirmAction('Apagar dados locais?', 'Isso remove favoritos, histórico, preferências, rascunhos e registros deste navegador. Esta ação não pode ser desfeita.', 'Apagar dados')) return;
     if (clearAllLocalData()) { prefs = getPrefs(); businessPreview = null; flashState = { mode:'due', completed:[], revealed:false }; libraryFilters = { query:'', type:'', sort:'recent', favorites:false }; render(); toast('Dados locais removidos.'); }
@@ -724,8 +858,9 @@ app.addEventListener('click', async event => {
   }
   if (action === 'timer-start') startTimer();
   if (action === 'timer-reset') { clearInterval(currentTimer?.interval); currentTimer = null; document.querySelector('#timer-display').textContent = '25:00'; document.querySelector('#timer-minutes').value = 25; }
-  if (action === 'calendar-prev' || action === 'calendar-next') { calendarView = new Date(calendarView.getFullYear(), calendarView.getMonth() + (action === 'calendar-prev' ? -1 : 1), 1, 12); render(); document.querySelector(`[data-action="${action}"]`)?.focus({ preventScroll:true }); }
-  if (action === 'calendar-today') { const today = new Date(); calendarView = new Date(today.getFullYear(), today.getMonth(), 1, 12); render(); document.querySelector('[data-action="calendar-today"]')?.focus({ preventScroll:true }); }
+  if (action === 'calendar-prev' || action === 'calendar-next') { selectedDay = ''; calendarView = new Date(calendarView.getFullYear(), calendarView.getMonth() + (action === 'calendar-prev' ? -1 : 1), 1, 12); render(); document.querySelector(`[data-action="${action}"]`)?.focus({ preventScroll:true }); }
+  if (action === 'calendar-today') { selectedDay = ''; const today = new Date(); calendarView = new Date(today.getFullYear(), today.getMonth(), 1, 12); render(); document.querySelector('[data-action="calendar-today"]')?.focus({ preventScroll:true }); }
+  if (action === 'calendar-select' && isValidDate(button.dataset.date)) { selectedDay = button.dataset.date; render(); const details = document.querySelector('#calendar-day-details'); details?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'}); details?.focus({preventScroll:true}); }
   if (action === 'export-calendar') downloadFile('help-rds-agenda.ics', calendarIcs(getDeadlines()), 'text/calendar;charset=utf-8');
   if (action === 'subject-cancel') resetFormHeading('subject');
   if (action === 'subject-edit') editForm(document.querySelector('#subject-form'), getRecords('subjects').find(item => item.id === button.dataset.id), 'subject');
@@ -746,20 +881,20 @@ app.addEventListener('click', async event => {
     const records = getRecords('library').map(item => item.id === button.dataset.id ? { ...item, lastOpened:localDate() } : item);
     if (!saveRecords('library', records)) toast('Não foi possível registrar o acesso neste navegador.');
   }
-  if (action === 'scroll-flashcard-form') { event.preventDefault(); document.querySelector('#flashcard-form')?.scrollIntoView({ behavior:'smooth', block:'start' }); document.querySelector('#flashcard-form textarea')?.focus({ preventScroll:true }); }
+  if (action === 'scroll-flashcard-form') { event.preventDefault(); document.querySelector('#flashcard-form')?.scrollIntoView({ behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth', block:'start' }); document.querySelector('#flashcard-form textarea')?.focus({ preventScroll:true }); }
   if (action === 'flashcard-cancel') resetFormHeading('flashcard');
   if (action === 'flashcard-edit') editForm(document.querySelector('#flashcard-form'), getRecords('flashcards').find(item => item.id === button.dataset.id), 'flashcard');
   if (action === 'flashcard-delete') {
     if (!await confirmAction('Excluir este cartão?', 'As revisões registradas neste cartão também serão removidas.', 'Excluir')) return;
     if (saveCollection('flashcards', getRecords('flashcards').filter(item => item.id !== button.dataset.id))) { flashState.revealed = false; render(); toast('Cartão excluído.'); }
   }
-  if (action === 'flashcard-mode' && ['due','all','difficult'].includes(button.dataset.mode)) { flashState = { mode:button.dataset.mode, completed:[], revealed:false }; renderFlashReview(`[data-action="flashcard-mode"][data-mode="${button.dataset.mode}"]`); }
+  if (action === 'flashcard-mode' && ['due','all','difficult'].includes(button.dataset.mode)) { flashState = { ...flashState, mode:button.dataset.mode, completed:[], revealed:false }; renderFlashReview(`[data-action="flashcard-mode"][data-mode="${button.dataset.mode}"]`); }
   if (action === 'flashcard-reveal') { flashState.revealed = true; renderFlashReview('[data-action="flashcard-rate"][data-rating="dificil"]'); }
   if (action === 'flashcard-rate') {
     const cards = getRecords('flashcards');
     const index = cards.findIndex(item => item.id === button.dataset.id);
     if (index < 0) return;
-    try { cards[index] = rateFlashcard(cards[index], button.dataset.rating); } catch { toast('Não foi possível registrar a revisão.'); return; }
+    try { cards[index] = rateFlashcard(cards[index], button.dataset.rating, localDate(), getReviewSettings()); } catch { toast('Não foi possível registrar a revisão.'); return; }
     if (saveCollection('flashcards', cards)) { flashState.completed.push(button.dataset.id); flashState.revealed = false; renderFlashReview(); (document.querySelector('[data-action="flashcard-reveal"]') || document.querySelector('[data-action="flashcard-mode"].selected'))?.focus({ preventScroll:true }); toast('Revisão registrada.'); }
   }
   if (action === 'admin-mark') {
@@ -768,20 +903,21 @@ app.addEventListener('click', async event => {
     const isDone = records.some(item => item.id === lesson.id && item.done === true);
     const updated = records.filter(item => item.id !== lesson.id);
     if (!isDone) updated.push({ id:lesson.id, done:true, updated:Date.now() });
-    const selectedAnswer = document.querySelector('#admin-quiz input[name="answer"]:checked')?.value;
-    const feedback = document.querySelector('#quiz-feedback')?.innerHTML || '';
+    const quizDrafts = ['#admin-quiz','#admin-quiz-extra'].map(selector => ({selector, answer:document.querySelector(`${selector} input[name="answer"]:checked`)?.value, feedback:document.querySelector(`${selector} #quiz-feedback, ${selector} .quiz-extra-feedback`)?.innerHTML || ''}));
     if (saveCollection('admin-progress', updated)) {
       render();
-      const option = Array.from(document.querySelectorAll('#admin-quiz input[name="answer"]')).find(input => input.value === selectedAnswer);
-      if (option) option.checked = true;
-      const target = document.querySelector('#quiz-feedback'); if (target) target.innerHTML = feedback;
+      for (const draft of quizDrafts) {
+        const option = Array.from(document.querySelectorAll(`${draft.selector} input[name="answer"]`)).find(input => input.value === draft.answer);
+        if (option) option.checked = true;
+        const target = document.querySelector(`${draft.selector} #quiz-feedback, ${draft.selector} .quiz-extra-feedback`); if (target) target.innerHTML = draft.feedback;
+      }
       document.querySelector('[data-action="admin-mark"]')?.focus({preventScroll:true});
       toast(isDone ? 'Marcação removida.' : 'Trilha marcada como estudada.');
     }
   }
-  if (action === 'quiz-reset') {
-    const quiz = document.querySelector('#admin-quiz'); quiz?.reset();
-    const feedback = document.querySelector('#quiz-feedback'); if (feedback) feedback.innerHTML = '';
+  if (action === 'quiz-reset' || action === 'quiz-reset-extra') {
+    const quiz = document.querySelector(action === 'quiz-reset' ? '#admin-quiz' : '#admin-quiz-extra'); quiz?.reset();
+    const feedback = quiz?.querySelector('#quiz-feedback, .quiz-extra-feedback'); if (feedback) feedback.innerHTML = '';
     quiz?.querySelector('input')?.focus({preventScroll:true});
   }
   if (action === 'lab-save') {
@@ -875,7 +1011,7 @@ app.addEventListener('input', event => {
   if (event.target.id === 'catalog-search') applyFilters();
   if (event.target.id === 'library-search') updateLibraryFilters();
   if (event.target.id === 'global-search') showGlobalSearch(event.target);
-  if (event.target.id === 'search-page-input') { searchQuery = event.target.value; document.querySelector('#search-page-results').innerHTML = searchResultsList(searchQuery, searchItems(searchQuery)); }
+  if (event.target.id === 'search-page-input') { searchQuery = event.target.value; document.querySelector('#search-page-results').innerHTML = searchResultsList(searchQuery, filteredSearchItems(searchQuery)); }
 });
 app.addEventListener('keydown', event => {
   if (event.target.id === 'global-search' && event.key === 'Enter') { event.preventDefault(); goToSearch(event.target.value); }
@@ -895,12 +1031,24 @@ window.addEventListener('hashchange', () => {
   // Recarregue para limpar o retorno antes de tratar a rota.
   if (inspectAuthCallback(location.href)) { location.reload(); return; }
   // Eventos de fragmento atrasados podem chegar após a navegação já ter renderizado a mesma rota.
-  if (route() === lastRenderedRoute) return;
+  if (location.hash === lastRenderedHash) return;
+  const isCardDraft = Boolean(pendingFlashDraft && route() === 'flashcards');
   render();
-  window.scrollTo(0,0);
-  (route() === 'busca' ? document.querySelector('#search-page-input') : document.querySelector('#main-content'))?.focus({ preventScroll:true });
+  if (isCardDraft) { const field = document.querySelector('#flashcard-form [name="question"]'); field?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'}); field?.focus({preventScroll:true}); return; }
+  if (!focusDeepLink()) { window.scrollTo(0,0); (route() === 'busca' ? document.querySelector('#search-page-input') : document.querySelector('#main-content'))?.focus({ preventScroll:true }); }
 });
+function focusDeepLink() {
+  const query = location.hash.split('?')[1];
+  const id = query ? new URLSearchParams(query).get('item') : null;
+  if (!id) return false;
+  const target = [...document.querySelectorAll('[data-record-id]')].find(element => element.dataset.recordId === id);
+  if (!target) { toast('Este item não foi encontrado neste navegador.'); return false; }
+  target.classList.add('record-highlight');
+  target.scrollIntoView({ behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth', block:'center' });
+  target.focus({preventScroll:true});
+  return true;
+}
 if (authBooting) app.innerHTML = '<main id="main-content" tabindex="-1"><p role="status">Validando seu acesso...</p></main>';
-else render();
+else { render(); focusDeepLink(); }
 // Só carregue o SDK no início se há sessão Google nesta aba ou retorno de autenticação.
 if (initialAuthCallback || hasSavedAuthSession()) ensureAccountInitialized();

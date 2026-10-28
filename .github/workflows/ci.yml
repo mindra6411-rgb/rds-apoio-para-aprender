@@ -1,0 +1,29 @@
+name: Help RDS CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: atividade-do-gugu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: atividade-do-gugu/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:performance
+      - run: npm audit --omit=dev --audit-level=moderate
+      - name: Instalar Chromium para testes
+        run: npx playwright install --with-deps chromium
+      - name: Navegação, dados, offline, acessibilidade e OAuth simulado
+        run: npm run qa:ci

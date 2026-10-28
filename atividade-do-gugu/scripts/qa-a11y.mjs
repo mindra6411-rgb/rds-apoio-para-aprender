@@ -9,7 +9,7 @@ if (!process.env.CHROMIUM_PATH) throw new Error('Informe CHROMIUM_PATH.');
 const browser = await chromium.launch({executablePath:process.env.CHROMIUM_PATH, headless:true, args:['--no-sandbox','--disable-setuid-sandbox']});
 const context = await browser.newContext({viewport:{width:1440,height:900}});
 const page = await context.newPage();
-const routes = ['home','vida-escolar','administracao','administracao/fundamentos','administracao/custos-preco','administracao/financas','administracao/marketing','administracao/pessoas','administracao/estrategia','laboratorio','carreira','materias','materias/s1','biblioteca','flashcards','agenda','tool/anotacoes','tool/juros-compostos','tecnologia','tecnologia/html-css','category/matematica','category/tributos','category/marketing','category/gestao','category/rh','category/estudos','catalog','settings','about'];
+const routes = ['home','vida-escolar','administracao','administracao/fundamentos','administracao/custos-preco','administracao/financas','administracao/marketing','administracao/pessoas','administracao/estrategia','laboratorio','carreira','materias','materias/s1','biblioteca','flashcards','agenda','tool/anotacoes','tool/juros-compostos','tecnologia','tecnologia/html-css','category/matematica','category/tributos','category/marketing','category/gestao','category/rh','category/estudos','catalog','busca','settings','privacidade','conta','about'];
 const violations = [];
 try {
   await page.goto(base);
@@ -21,8 +21,9 @@ try {
       put('records:notes',[{id:'n1',titulo:'Nota fictícia',categoria:'outra',materia:'Matemática',conteudo:'Texto fictício'}]);
       put('records:library',[{id:'l1',title:'Guia fictício',subject:'Matemática',url:'https://example.com/',type:'PDF',origin:'Complementar',favorite:true}]);
       put('records:flashcards',[{id:'f1',question:'Pergunta fictícia?',answer:'Resposta fictícia',subject:'Matemática',difficulty:'medio',reviews:1}]);
-      put('records:tasks',[{id:'t1',titulo:'Tarefa fictícia',prazo:'2026-10-28'}]);
-      put('records:school-dates',[{id:'e1',titulo:'Entrega fictícia',data:'2026-10-28',materia:'Matemática'}]);
+      const now = new Date(); const day = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      put('records:tasks',[{id:'t1',titulo:'Tarefa fictícia',prazo:day}]);
+      put('records:school-dates',[{id:'e1',titulo:'Entrega fictícia',data:day,materia:'Matemática'},{id:'e2',titulo:'Outra data fictícia',data:day,materia:'Matemática'},{id:'e3',titulo:'Terceira data fictícia',data:day,materia:'Matemática'}]);
       put('records:admin-progress',[{id:'fundamentos',done:true}]);
       put('records:career-progress',[{id:'projeto',done:true}]);
       put('records:business-scenarios',[{id:'a',name:'Produto A',created:Date.now(),values:{price:20,variable:12,fixed:800,quantity:120}},{id:'b',name:'Produto B',created:Date.now(),values:{price:22,variable:12,fixed:800,quantity:120}},{id:'invalid',name:'Inválido',values:{price:'não informado'}}]);
@@ -30,11 +31,13 @@ try {
     },theme);
     await page.reload();
     assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
-    for (const width of [1440,390]) {
+    for (const width of [1440,768,390,320]) {
       await page.setViewportSize({width,height:900});
       for (const route of routes) {
         await page.goto(`${base}#/${route}`,{waitUntil:'domcontentloaded'});
-        if (route === 'flashcards' && await page.locator('[data-action="flashcard-reveal"]').count()) await page.locator('[data-action="flashcard-reveal"]').click();
+        if (route === 'flashcards') { if (await page.locator('[data-action="flashcard-reveal"]').count()) await page.locator('[data-action="flashcard-reveal"]').click(); await page.locator('.review-settings summary').click(); }
+        if (route === 'agenda') { const more=page.locator('.calendar-more').first(); if (await more.count()) await more.click(); }
+        if (route === 'settings') { await page.locator('#backup-form [name="backup"]').setInputFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({'records:tasks':[{id:'novo',titulo:'Exemplo'}]}))}); await page.locator('#backup-form button[type="submit"]').click(); await page.waitForFunction(() => document.querySelector('#backup-preview')?.textContent.includes('Mesclar')); }
         if (route.startsWith('administracao/')) { await page.locator('#admin-quiz [name="answer"]').first().check(); await page.locator('#admin-quiz button[type="submit"]').click(); }
         if (route === 'laboratorio') {
           await page.locator('#business-form button[type="submit"]').click();
@@ -59,6 +62,9 @@ try {
       }
     }
   }
+  await page.evaluate(() => { localStorage.removeItem('help-rds:records:subjects'); localStorage.removeItem('help-rds:onboarding'); }); await page.goto(`${base}#/home`);
+  const guideResult = await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();
+  if (guideResult.violations.length) violations.push({theme:'dark',width:320,route:'home / guia inicial',violations:guideResult.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>({html:n.html,summary:n.failureSummary}))}))});
   if (violations.length) { console.error(JSON.stringify(violations,null,2)); process.exitCode = 1; }
-  else console.log(`OK: axe WCAG 2 A/AA e 2.1 A/AA em ${routes.length} rotas, dois temas e duas larguras.`);
+  else console.log(`OK: axe WCAG 2 A/AA e 2.1 A/AA em ${routes.length} rotas, dois temas e quatro larguras, incluindo guia e prévia de importação.`);
 } finally { await browser.close(); }

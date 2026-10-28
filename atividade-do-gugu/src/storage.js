@@ -15,6 +15,19 @@ export const getPrefs = () => {
   return { theme: safe.theme === 'dark' ? 'dark' : 'light', favorites: stringList(safe.favorites), recent: stringList(safe.recent) };
 };
 export const savePrefs = value => write('preferences', value);
+
+export const getReviewSettings = () => {
+  const value = read('review-settings', {});
+  const defaults = { dificil:1, medio:3, facil:7 };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return defaults;
+  return Object.fromEntries(Object.entries(defaults).map(([key, fallback]) => [key, Number.isInteger(value[key]) && value[key] >= 1 && value[key] <= 365 ? value[key] : fallback]));
+};
+export const saveReviewSettings = value => {
+  if (!value || !['dificil','medio','facil'].every(key => Number.isInteger(value[key]) && value[key] >= 1 && value[key] <= 365)) return false;
+  return write('review-settings', value);
+};
+export const getOnboarding = () => { const value = read('onboarding', {}); return Boolean(value && typeof value === 'object' && value.dismissed === true); };
+export const saveOnboarding = () => write('onboarding', { dismissed:true });
 export const getDraft = id => {
   const value = read(`calculator:${id}`, {});
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};

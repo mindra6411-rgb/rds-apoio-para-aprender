@@ -10,14 +10,14 @@ Antes da V3, a navegação ainda não conectava os conteúdos de Administração
 
 ## O que funciona
 
-- **Início e vida escolar:** navegação pelos eixos de estudo, Administração, laboratório, rotina e desenvolvimento profissional; compromissos e contadores refletem apenas os registros do navegador. Matérias podem ser criadas, editadas e excluídas; seus recursos são associados pelo nome informado, ignorando acentos e maiúsculas. Alterar o nome não modifica os registros associados.
-- **Trilhas de Administração:** seis percursos introdutórios — fundamentos, custos e preço, finanças, marketing, pessoas e estratégia/projetos. Cada um contém conceito, caso fictício, questão de múltipla escolha com retorno comentado e conexão a uma ferramenta. É possível tentar novamente e marcar/desmarcar uma trilha como estudada. A última tentativa por trilha e as marcações ficam no navegador; não são notas oficiais, prova de aprendizagem ou certificação. Os textos são materiais complementares, não conteúdo curricular da escola.
-- **Laboratório empresarial:** informe nome opcional, preço unitário, custo variável unitário, custos fixos e quantidade de um mesmo período. A simulação apresenta receita, custo variável total, contribuição unitária, resultado operacional simplificado, resultado/receita e ponto de equilíbrio. O rascunho fica local; até 100 cenários podem ser salvos, carregados, excluídos com confirmação e comparados dois a dois. A comparação mostra a diferença de resultado B − A e uma tabela de premissas e resultados dos dois cenários. Substituir ou limpar um rascunho preenchido também exige confirmação. Registros inválidos são sinalizados e podem ser removidos separadamente, após confirmação.
+- **Início e vida escolar:** o resumo mostra as próximas tarefas e datas, tarefas atrasadas e cartões devidos, somente a partir deste navegador. Um guia inicial opcional pode ser dispensado. Anotações, tarefas, datas, referências e cartões podem ser vinculados ao identificador de uma matéria; renomeá-la preserva esses vínculos. Registros antigos continuam associados por nome quando possível; nomes repetidos são ambíguos e não são convertidos automaticamente.
+- **Trilhas de Administração:** seis percursos com conceito, caso fictício e atividade comentada. Cada trilha recebeu um exercício extra com explicação, explicitamente marcado como **rascunho ainda não revisado pelos responsáveis**. Tentativas e marcações são locais; não são notas oficiais nem certificação. Os textos são complementares e não representam o currículo da escola.
+- **Laboratório empresarial:** informe preço, custos e quantidade de um período. A simulação oferece resultados, barras e uma tabela textual acessível, além de salvar e comparar até 100 cenários fictícios. Limpar ou substituir rascunhos e excluir cenários exige confirmação. Os números são calculados apenas a partir das premissas informadas; veja os limites abaixo.
 - **Meu futuro:** um mapa visual de cinco passos reversíveis para interesses, competências, projetos, apresentação e próximos passos, com acesso a ferramentas de projetos e anotações. As marcações são autodeclarações locais, não qualificações comprovadas.
-- **Rotina pessoal preservada:** calendário mensal e exportação `.ics`, tarefas, agenda semanal, anotações, projetos, favoritos, histórico, rascunhos, temporizador e 38 ferramentas originais. As datas são cadastradas pelo estudante, não são eventos oficiais; não há notificações.
-- **Biblioteca pessoal:** guardar, editar, excluir, pesquisar, filtrar, ordenar e favoritar links HTTP/HTTPS, com origem informada pelo usuário e detecção de duplicatas que diferem somente no fragmento. A aplicação não hospeda arquivos; documentos são abertos no site de origem e links com usuário/senha embutidos não são aceitos.
-- **Flashcards manuais:** pergunta, resposta, matéria, tema, dificuldade e fonte, com criação, edição, exclusão e sessões de revisão. A autoavaliação difícil/médio/fácil sugere retorno em 1/3/7 dias. Os contadores registram atividade, não acertos comprovados. “Difíceis” reúne cartões assim avaliados ou cadastrados inicialmente como difíceis.
-- **Pesquisa global local:** encontra ferramentas, áreas, trilhas, guias, cenários e conteúdos pessoais deste navegador. Não indexa PDFs externos. Os três guias anteriores de lógica, HTML/CSS e JavaScript continuam acessíveis como conteúdo extra pela área de desenvolvimento profissional; não executam código e não representam o currículo oficial.
+- **Rotina pessoal preservada:** calendário mensal interativo, acesso a todos os compromissos do dia e exportação `.ics`; tarefas aceitam matéria, prioridade e até 30 subtarefas opcionais. Agenda semanal, anotações, projetos, favoritos, histórico, rascunhos, temporizador e as 38 ferramentas originais continuam disponíveis. Não há datas oficiais ou notificações automáticas.
+- **Biblioteca pessoal:** links HTTP/HTTPS cadastrados pelo estudante, com filtros, origem informada e detecção de duplicatas; não hospeda arquivos. Há também uma seleção externa do [Banco Central](https://www.bcb.gov.br/cidadaniafinanceira) e do [Sebrae](https://sebrae.com.br/educacao-empreendedora), consultada em 28/10/2026 e identificada como conteúdo externo, não material oficial da escola. Disponibilidade e conteúdo podem mudar.
+- **Flashcards manuais:** pergunta e resposta escritas pelo estudante, matéria, tema, dificuldade e fonte opcionais. Uma anotação pode preencher um **rascunho** de resposta: o estudante escreve a pergunta e revisa o texto antes de salvar. A revisão pode ser filtrada por matéria e tema; intervalos difícil/médio/fácil começam em 1/3/7 dias e podem ser ajustados entre 1 e 365 dias. Contadores registram atividade, não aprendizagem comprovada.
+- **Pesquisa global local:** encontra ferramentas, áreas, trilhas, guias, cenários e conteúdos pessoais, com filtro por tipo e links que abrem o registro exato neste navegador. Não indexa PDFs. Os guias de lógica, HTML/CSS e JavaScript são complementares e não executam código.
 - **Experiência:** nove ilustrações originais geradas, otimizadas em WebP, ícones SVG locais, layout responsivo, modos claro/escuro, foco visível, navegação por teclado e respeito a movimento reduzido. As ilustrações representam objetos e ideias, não fotografias da escola ou de estudantes.
 - **Conta (em implantação):** entrada somente pelo Google usando Supabase Auth. O serviço cria a conta no primeiro acesso e reconhece o usuário nos seguintes, conforme sua configuração; é possível sair da sessão. As ferramentas continuam disponíveis sem conta. A configuração do Google OAuth precisa ser confirmada e testada de verdade; os testes automatizados usam respostas simuladas.
 
@@ -32,22 +32,32 @@ Antes da V3, a navegação ainda não conectava os conteúdos de Administração
 
 **Os registros de estudo são locais, não privados por autenticação.** Entrar na conta não protege nem sincroniza as anotações, tarefas, favoritos ou quaisquer outros dados de estudo. Qualquer pessoa com acesso ao mesmo perfil do navegador pode lê-los ou alterá-los; não há backup automático. O navegador pode bloquear ou apagar o armazenamento; quando uma gravação falha, a interface avisa. Não inclua senhas, dados pessoais sensíveis, links privados ou dados de colegas ou empresas. Em dispositivo compartilhado, saia da conta, exporte o necessário e apague os dados em Configurações. Apagar os dados locais não encerra a sessão.
 
-A autenticação ocorre pelo Google e Supabase Auth com OAuth/PKCE por HTTPS; o aplicativo não recebe senha Google e deixa o SDK gerenciar a sessão em `sessionStorage` da aba. Recarregar mantém a sessão enquanto a aba durar; ela não é sincronizada entre abas e uma aba sem cópia dessa sessão exige nova entrada. O código PKCE precisa voltar na mesma aba; se o armazenamento da aba ou Web Crypto estiverem indisponíveis, o acesso é interrompido com aviso, sem tentar um fluxo de memória que não sobreviveria ao redirecionamento. A sessão não é exportada junto aos registros locais. Não há exclusão de conta na interface: o responsável deve providenciar atendimento às solicitações e definir política de retenção, privacidade e medidas para menores antes do uso real.
+A autenticação ocorre pelo Google e Supabase Auth com OAuth/PKCE por HTTPS; o aplicativo não recebe senha Google e deixa o SDK gerenciar a sessão em `sessionStorage` da aba. Recarregar mantém a sessão enquanto a aba durar; ela não é sincronizada entre abas e uma aba sem cópia dessa sessão exige nova entrada. O código PKCE precisa voltar na mesma aba; se o armazenamento da aba ou Web Crypto estiverem indisponíveis, o acesso é interrompido com aviso, sem tentar um fluxo de memória que não sobreviveria ao redirecionamento. A sessão não é exportada junto aos registros locais. A página de privacidade informa que a exclusão da conta não está disponível sem um canal real. `VITE_PRIVACY_CONTACT_EMAIL` só deve ser configurada com um e-mail público, previamente autorizado e atendido pelo responsável; ela cria um link de solicitação, não apaga a conta automaticamente. É preciso definir política de retenção e medidas para menores antes do uso real.
 
-A exportação JSON é uma cópia sob responsabilidade de quem a baixar; **não há importador integrado**. Links externos podem coletar dados segundo a política do site de destino; origem e disponibilidade não são verificadas automaticamente. O temporizador funciona somente enquanto a aplicação está aberta, sem serviço em segundo plano.
+### Backup e restauração local
 
-Não foram implementados perfil ou dados de estudo sincronizados, uploads/arquivos privados, biblioteca compartilhada, painel administrativo, avisos oficiais, moderação, comunidade, colaboração, assistente de IA, leitura de PDFs, geração automática de conteúdos, simulados completos, área ENEM, notificações ou funcionamento offline/PWA. Há seis questões simples nas trilhas, não uma plataforma de avaliações. Antes de salvar dados privados no banco, será necessário criar tabelas com RLS e políticas de acesso verificadas entre usuários, consentimento e governança adequados para menores. Não há tabelas de registros de estudo nem testes reais de isolamento entre contas nesta etapa.
+Em **Configurações**, exporte uma cópia JSON versionada. A sessão da conta não é incluída. Também é possível importar backups completos antigos (objeto de grupos) e novos, além de exportações individuais antigas de ferramentas (listas): neste caso, escolha explicitamente a ferramenta de origem, pois o arquivo sozinho não a identifica. O limite é 10 MiB; JSON inválido, estruturas profundas, IDs ausentes/duplicados ou perigosos e versões não reconhecidas são recusados. Grupos desconhecidos são ignorados e informados na prévia.
+
+A opção padrão **mesclar** mantém registros locais com o mesmo ID e preferências existentes; IDs novos são adicionados. **Substituir** altera somente os grupos presentes no arquivo, com confirmação, e não apaga outros grupos. Antes de qualquer importação, exporte outra cópia e feche as demais abas. A leitura e a gravação são locais, com verificação de alterações desde a prévia e tentativa de rollback; `localStorage` não oferece uma transação entre grupos, e uma falha ou concorrência pode impedir a recuperação integral. Arquivos baixados são responsabilidade de quem os guarda.
+
+### Acesso offline opcional
+
+Depois de preparar a cópia em **Configurações** enquanto estiver online, o service worker armazena apenas a página e os arquivos públicos do build no cache do navegador. Ele não guarda chamadas ao Supabase, respostas de autenticação, URLs com parâmetros ou registros de estudo. É possível remover essa cópia sem apagar os dados locais. Navegadores podem limpar o cache; atualizações e a primeira preparação dependem de conexão. Login Google e links externos exigem internet. O recurso exige HTTPS (ou localhost), um navegador compatível e o build de produção com `sw.js`; não está disponível no servidor Vite de desenvolvimento.
+
+Links externos podem coletar dados segundo a política de seus destinos; origem e disponibilidade dos links cadastrados por estudantes não são verificadas automaticamente. O temporizador funciona somente enquanto a aplicação está aberta.
+
+Não foram implementados sincronização de dados de estudo, exclusão automática de conta, uploads privados, biblioteca compartilhada, painel administrativo, avisos oficiais, moderação, comunidade, colaboração, assistente de IA, leitura de PDFs, simulados completos ou notificações. Os seis exercícios extras são rascunhos aguardando revisão dos responsáveis. Antes de armazenar dados privados no banco, é necessário definir consentimento e governança para menores, criar tabelas com RLS e testar isolamento entre usuários. Não há tabelas de registros de estudo nem testes reais de isolamento nesta etapa. Consulte o [plano de segurança e pendências](docs/plano-privacidade-sincronizacao.md).
 
 ## Tecnologias e arquivos
 
 - HTML semântico, CSS responsivo, JavaScript ES modules, Vite 6 e `@supabase/supabase-js`. O SDK é carregado sob demanda ao abrir a conta ou retomar uma sessão; registros de estudo continuam locais.
-- `src/admin.js`: conteúdo complementar e regras puras das trilhas, progresso e simulação. `src/admin-pages.js` e `src/admin.css`: páginas e estilos da V3.
+- `src/admin.js` e `src/exercises.js`: regras das trilhas e exercícios extras não revisados. `src/admin-pages.js` e `src/admin.css`: páginas, gráfico e tabela do laboratório.
 - `src/tools.js`, `src/calculations.js`: catálogo e fórmulas das ferramentas anteriores. `src/study.js`: calendário, URLs, flashcards, iCalendar e guias extras.
-- `src/main.js`, `src/study-pages.js`, `src/subject-pages.js`: shell, navegação, pesquisa e interfaces. `src/storage.js`: persistência tolerante a falhas com o prefixo anterior `help-rds:`. `src/auth.js`, `src/auth-pages.js`, `src/auth.css`: integração, interface e estilos da conta.
+- `src/main.js`, `src/study-pages.js`, `src/subject-pages.js`: shell, navegação e interfaces. `src/storage.js`, `src/backup.js`, `src/subject-links.js` e `src/tasks.js`: persistência local, importação, vínculos e subtarefas. `src/offline.js` e `src/offline-sw.js`: acesso offline opcional. `src/privacy.js`: informações de privacidade. `src/auth.js`, `src/auth-pages.js`, `src/auth.css`: conta.
 - Novas coleções V3: `records:admin-progress`, `records:admin-attempts`, `records:business-scenarios`, `records:career-progress` e rascunho `calculator:admin-lab`. Coleções anteriores, incluindo `records:subjects`, `records:library` e `records:flashcards`, continuam legíveis. Não houve migração de banco.
 - `src/styles.css`, `src/design-components.css`, `src/visual.css` e `src/admin.css` compartilham estilos; `src/icons.js` e `src/assets/` contêm ícones e imagens locais. As nove WebPs somam aproximadamente 504 KiB e têm dimensões explícitas; imagens fora da área inicial usam carregamento tardio. Confira os termos aplicáveis às imagens geradas antes de distribuição que exija autorização ou licença específica.
 
-**Variáveis de ambiente:** `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` configuram o acesso ao Supabase; veja `.env.example`. As variáveis `VITE_` são públicas no navegador: use somente uma chave `sb_publishable_`, nunca `service_role`, `sb_secret_`, senha do banco ou credenciais SMTP. Sem essas variáveis, a conta fica indisponível e as demais ferramentas continuam utilizáveis. Arquivos `.env.local` ficam fora do Git. `APP_URL` e `CHROMIUM_PATH` são usados apenas nos testes opcionais de navegador.
+**Variáveis de ambiente:** `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` configuram o acesso ao Supabase; `VITE_PRIVACY_CONTACT_EMAIL` é um contato público opcional e real, definido apenas após autorização do responsável. Veja `.env.example`. As variáveis `VITE_` são públicas no navegador: use somente uma chave `sb_publishable_`, nunca `service_role`, `sb_secret_`, senha do banco ou credenciais SMTP. Sem essas variáveis, a conta fica indisponível e as demais ferramentas continuam utilizáveis. Arquivos `.env.local` ficam fora do Git. `APP_URL` e `CHROMIUM_PATH` são usados apenas nos testes opcionais de navegador.
 
 ## Executar e publicar
 
@@ -62,7 +72,7 @@ npm run build
 npm run preview
 ```
 
-O servidor de desenvolvimento/preview aceita hosts externos para pré-visualização; não o use como servidor de produção exposto. Para publicação estática, execute o build e publique **o conteúdo de `atividade-do-gugu/dist/`**, incluindo `assets/`. Os caminhos são relativos e as rotas usam `#`, funcionando também em subdiretórios sem fallback de rotas. Verifique início, trilha, laboratório, dados locais e tema após publicar. Use HTTPS e configure cache e cabeçalhos de segurança conforme a hospedagem existente. O custo de hospedagem depende do plano contratado; serviços futuros precisam de avaliação separada.
+O servidor de desenvolvimento/preview aceita hosts externos para pré-visualização; não o use como servidor de produção exposto. Para publicação estática, execute o build e publique **o conteúdo de `atividade-do-gugu/dist/`**, incluindo `assets/` e `sw.js`. Os caminhos são relativos e as rotas usam `#`, funcionando também em subdiretórios sem fallback de rotas. Verifique início, trilha, laboratório, dados locais e tema após publicar. Use HTTPS e configure cache e cabeçalhos de segurança conforme a hospedagem existente. O custo de hospedagem depende do plano contratado; serviços futuros precisam de avaliação separada.
 
 ### Configuração do projeto no Vercel
 
@@ -94,27 +104,26 @@ O Supabase Auth armazena as contas no serviço gerenciado; esta etapa não cria 
 
 ## Testes e qualidade
 
-- `npm test`: testes unitários cobrindo os recursos anteriores, configuração, mensagens, retorno PKCE e integração simulada da conta.
-- `npm run build`: compilação de produção. Os testes de conta, fluxos gerais e Administração também passaram no build servido a partir de um subdiretório estático; confira novamente na hospedagem de destino.
-- `scripts/qa-browser.mjs`: fluxos anteriores, 38 rotas de ferramentas, dados locais, exclusões, busca, exportações e larguras de 320, 390, 768, 1024 e 1440 px.
-- `scripts/qa-admin.mjs`: trilhas e correção, simulação com vírgula, comparação, persistência, recuperação de dados inválidos, confirmações, carreira, compatibilidade com dados anteriores, busca, exportação, falha de armazenamento e as mesmas cinco larguras.
-- `scripts/qa-a11y.mjs`: axe WCAG 2/2.1 A/AA em 29 rotas, dois temas e duas larguras, incluindo exercícios e simulações preenchidas.
-- `scripts/qa-auth.mjs`: OAuth/PKCE, retorno, segundo acesso, cancelamento, erros, sessão por aba, saída e preservação de dados locais com respostas simuladas; acessibilidade em dois temas e duas larguras, e overflow em cinco larguras. Nenhum usuário real é criado. Testes automatizados não substituem avaliação humana de acessibilidade, conteúdo ou segurança.
+- `npm test`: testes unitários das regras existentes e novas, incluindo backup legado e versionado, conflitos, rollback, vínculos, subtarefas, intervalos, atividades e privacidade.
+- `npm run build` e `npm run check:performance`: build e orçamento gzip do HTML, JS e CSS iniciais. Na medição local de 28/10/2026, estes três arquivos somaram aproximadamente **85 KiB gzip**; não inclui imagens e SDK carregados depois e não é uma garantia de velocidade.
+- `npm run qa:ci`: navegação e persistência nas 38 ferramentas, Administração, fluxos novos, exportação/importação, funcionamento offline, subdiretório, desempenho simulado, axe e OAuth/PKCE **simulado**. Os scripts usam dados fictícios. Na execução local, o axe cobriu 32 rotas, dois temas e larguras de 320, 390, 768 e 1440 px; os fluxos também verificam 1024 px.
+- `npm run qa:performance`: mede DOM, carregamento e primeira pintura em Chromium com CPU e rede simuladas; não substitui medições reais com consentimento em conexões e dispositivos variados.
+- `.github/workflows/ci.yml`: instala dependências, executa testes, build, orçamento, auditoria das dependências de produção e os QAs de navegador no GitHub. O workflow só poderá ser confirmado após ser enviado ao GitHub e executado lá.
 
-Para reproduzir os testes opcionais, tenha um Chromium compatível e instale somente as dependências de teste, sem alterar o manifesto:
+Para reproduzir localmente com Node 22 e Chromium:
 
 ```bash
-npm install --no-save --package-lock=false playwright-core @axe-core/playwright
-npm run dev
-# em outro terminal:
-CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-browser.mjs
-CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-admin.mjs
-CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-a11y.mjs
-# Em outro terminal, inicie um servidor separado com URL e chave fictícias:
-VITE_SUPABASE_URL=https://qa.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_mock npm run dev -- --port 5174 --strictPort
-# Em outro terminal, rode o teste contra essa instância simulada:
-APP_URL=http://127.0.0.1:5174/ CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-auth.mjs
+npm ci
+npm run build
+npm run check:performance
+# Se necessário, instale um Chromium de teste com o Playwright:
+npx playwright install chromium
+# Com CHROMIUM_PATH ausente, o orquestrador usa o navegador instalado pelo Playwright.
+npm run qa:ci
+# Alternativamente, use CHROMIUM_PATH=/caminho/para/chromium npm run qa:ci
 ```
+
+A verificação automatizada de acessibilidade e as dimensões simuladas **não substituem** testes humanos, leitores de tela e dispositivos físicos. O fluxo de autenticação dos QAs não valida credenciais reais, criação de conta ou vinculação de identidades.
 
 ## Próximos passos e créditos
 

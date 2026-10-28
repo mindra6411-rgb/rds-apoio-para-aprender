@@ -1,3 +1,5 @@
+import { extraExercises } from './exercises.js';
+
 // Conteúdo complementar e regras puras do espaço de Administração.
 // Nenhum texto abaixo representa uma grade oficial ou aconselhamento profissional.
 export const lessons = [
@@ -94,11 +96,12 @@ export const lessons = [
 ];
 
 export const findLesson = id => lessons.find(lesson => lesson.id === id);
-export function gradeLesson(lessonId, optionId) {
+export function gradeLesson(lessonId, optionId, exercise = 'principal') {
   const lesson = findLesson(lessonId);
-  const option = lesson?.question.options.find(item => item.id === optionId);
+  const question = exercise === 'principal' ? lesson?.question : exercise === 'extra' ? extraExercises[lessonId] : null;
+  const option = question?.options.find(item => item.id === optionId);
   if (!lesson || !option) throw new Error('Escolha uma alternativa válida.');
-  return { correct:option.id === lesson.question.correct, feedback:option.feedback };
+  return { correct:option.id === question.correct, feedback:option.feedback };
 }
 export function lessonProgress(records) {
   const done = new Set(records.filter(record => record?.done === true && findLesson(record.id)).map(record => record.id));

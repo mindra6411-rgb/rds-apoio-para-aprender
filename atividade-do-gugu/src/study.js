@@ -25,10 +25,10 @@ export function addDays(value, days) {
 export function deadlines(tasks, schoolDates) {
   return [
     ...tasks.filter(item => !item.done && isValidDate(item.prazo)).map(item => ({
-      id: item.id, title: item.titulo || 'Tarefa', date: item.prazo, kind: 'Tarefa', href: '#/tool/lista-tarefas',
+      id: item.id, title: item.titulo || 'Tarefa', date: item.prazo, kind: 'Tarefa', href: `#/tool/lista-tarefas${typeof item.id === 'string' && item.id ? `?item=${encodeURIComponent(item.id)}` : ''}`,
     })),
     ...schoolDates.filter(item => isValidDate(item.data)).map(item => ({
-      id: item.id, title: item.titulo || 'Compromisso', date: item.data, kind: 'Avaliação ou entrega', subject: item.materia || '', href: '#/tool/provas-trabalhos',
+      id: item.id, title: item.titulo || 'Compromisso', date: item.data, kind: 'Avaliação ou entrega', subject: item.materia || '', href: `#/tool/provas-trabalhos${typeof item.id === 'string' && item.id ? `?item=${encodeURIComponent(item.id)}` : ''}`,
     })),
   ].sort((a, b) => a.date.localeCompare(b.date) || String(a.title).localeCompare(String(b.title), 'pt-BR'));
 }
@@ -65,12 +65,13 @@ export function canonicalUrl(value) {
 }
 
 export const reviewIntervals = { dificil: 1, medio: 3, facil: 7 };
-export function rateFlashcard(card, rating, today = localDate()) {
-  if (!Object.hasOwn(reviewIntervals, rating) || !isValidDate(today)) throw new Error('Avaliação inválida.');
+export function rateFlashcard(card, rating, today = localDate(), intervals = reviewIntervals) {
+  const days = intervals?.[rating];
+  if (!Object.hasOwn(reviewIntervals, rating) || !isValidDate(today) || !Number.isInteger(days) || days < 1 || days > 365) throw new Error('Avaliação inválida.');
   return {
     ...card,
     lastRating: rating,
-    nextReview: addDays(today, reviewIntervals[rating]),
+    nextReview: addDays(today, days),
     reviews: (Number(card.reviews) || 0) + 1,
     difficultReviews: (Number(card.difficultReviews) || 0) + (rating === 'dificil' ? 1 : 0),
     lastReviewed: today,

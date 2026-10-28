@@ -112,7 +112,7 @@ try {
   await go('settings');
   const [download] = await Promise.all([page.waitForEvent('download'),click('export-all')]);
   const json = JSON.parse(await readFile(await download.path(),'utf8'));
-  assert.ok(json['records:business-scenarios']); assert.ok(json['records:admin-progress']); assert.ok(json['records:career-progress']); assert.ok(json['records:subjects']);
+  assert.equal(json.format, 'help-rds-local-backup'); assert.ok(json.data['records:business-scenarios']); assert.ok(json.data['records:admin-progress']); assert.ok(json.data['records:career-progress']); assert.ok(json.data['records:subjects']);
   await click('clear-data'); await page.locator('#confirm-submit').click(); await waitCount('business-scenarios',0);
   assert.equal((await records('admin-progress')).length,0); assert.equal((await records('career-progress')).length,0); assert.equal((await records('subjects')).length,0);
 
