@@ -59,7 +59,13 @@ npm run build
 npm run preview
 ```
 
-O servidor de desenvolvimento/preview aceita hosts externos para pré-visualização; não o use como servidor de produção exposto. Para publicação estática, execute o build e publique **o conteúdo de `atividade-do-gugu/dist/`**, incluindo `assets/`. Os caminhos são relativos e as rotas usam `#`, funcionando também em subdiretórios sem fallback de rotas. Verifique início, trilha, laboratório, dados locais e tema após publicar. Use HTTPS e configure cache e cabeçalhos de segurança conforme a hospedagem existente. Não há um deploy automático configurado no repositório nem um novo serviço pago. O custo de hospedagem depende do plano contratado; serviços futuros precisam de avaliação separada.
+O servidor de desenvolvimento/preview aceita hosts externos para pré-visualização; não o use como servidor de produção exposto. Para publicação estática, execute o build e publique **o conteúdo de `atividade-do-gugu/dist/`**, incluindo `assets/`. Os caminhos são relativos e as rotas usam `#`, funcionando também em subdiretórios sem fallback de rotas. Verifique início, trilha, laboratório, dados locais e tema após publicar. Use HTTPS e configure cache e cabeçalhos de segurança conforme a hospedagem existente. O custo de hospedagem depende do plano contratado; serviços futuros precisam de avaliação separada.
+
+### Configuração do projeto no Vercel
+
+O projeto conectado ao GitHub usa **Root Directory: `atividade-do-gugu`** e o preset **Vite**. Com isso, o Vercel encontra `package.json` e `package-lock.json`, instala as dependências, executa `npm run build` e publica `dist`. A configuração é feita no projeto do Vercel, não em um arquivo versionado neste repositório. A branch `main` é a origem de produção.
+
+Se o log mostrar `vite: command not found`, confira primeiro o Root Directory: se ele apontar para a raiz do repositório, o Vercel não encontrará as dependências do aplicativo, que fica na subpasta. Após ajustar, faça um novo deploy e confirme a versão publicada; o erro de um deploy antigo não é alterado retroativamente.
 
 ## Testes e qualidade
 
