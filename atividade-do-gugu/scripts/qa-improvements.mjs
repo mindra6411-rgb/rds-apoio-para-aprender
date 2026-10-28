@@ -141,8 +141,37 @@ try {
     return urls;
   });
   assert.ok(cached.length > 3); assert.ok(cached.every(value => {const url=new URL(value);return url.origin===locationOrigin && !url.search && (url.pathname.endsWith('/')||url.pathname.includes('/assets/'));}));
-  await context.setOffline(true); await page.reload({waitUntil:'domcontentloaded'});
-  assert.match(await read('#main-content'),/Configurações/); assert.equal((await records('tasks'))[0].id,'new-only');
+  // Confere o cabeçalho que causou regressão em Chromium recente e verifica
+  // que JavaScript e CSS vieram do worker, não apenas do cache do navegador.
+  const hasVaryOrigin = await page.evaluate(async () => {
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) {
+        if (/\/assets\/.*\.js$/.test(new URL(request.url).pathname) && /\borigin\b/i.test((await cache.match(request))?.headers.get('vary') || '')) return true;
+      }
+    }
+    return false;
+  });
+  assert.equal(hasVaryOrigin, true, 'O teste offline deve incluir um asset com Vary: Origin.');
+  const offlineAssets = []; const offlineFailures = [];
+  const trackResponse = response => {
+    if (response.url().startsWith(base) && /\/assets\//.test(new URL(response.url()).pathname)) {
+      offlineAssets.push({type:response.request().resourceType(),status:response.status(),worker:response.fromServiceWorker()});
+    }
+  };
+  const trackFailure = request => {
+    if (request.url().startsWith(base) && /\/assets\//.test(new URL(request.url()).pathname)) offlineFailures.push(`${request.url()}: ${request.failure()?.errorText}`);
+  };
+  page.on('response',trackResponse); page.on('requestfailed',trackFailure);
+  try {
+    await context.setOffline(true); await page.reload({waitUntil:'load'});
+    assert.match(await read('#main-content'),/Configurações/); assert.equal((await records('tasks'))[0].id,'new-only');
+    for (const type of ['script','stylesheet']) assert.ok(offlineAssets.some(asset => asset.type===type && asset.status===200 && asset.worker), `${type} não veio do worker: ${JSON.stringify(offlineAssets)}`);
+    assert.deepEqual(offlineFailures,[]);
+  } catch (error) {
+    console.error('Recarga offline: arquivos e falhas',JSON.stringify({offlineAssets,offlineFailures}));
+    throw error;
+  } finally { page.off('response',trackResponse); page.off('requestfailed',trackFailure); }
   await go('materias'); await fill('#subject-form','name','Matéria criada offline'); await submit('#subject-form');
   assert.ok((await records('subjects')).some(item=>item.name==='Matéria criada offline'));
   await context.setOffline(false); await go('settings'); await page.waitForFunction(() => document.querySelector('#offline-status')?.textContent.includes('preparada neste navegador'));

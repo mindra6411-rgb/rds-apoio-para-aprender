@@ -35,6 +35,9 @@ self.addEventListener('fetch', event => {
   if (isAppEntry) {
     event.respondWith(fetch(request).catch(async () => (await caches.open(cacheName)).match(scopeUrl.href)));
   } else if (publicFiles.has(url.href)) {
-    event.respondWith((async () => (await (await caches.open(cacheName)).match(request)) || fetch(request))());
+    // Os arquivos do build são públicos e fixos para este caminho. Navegadores
+    // recentes enviam Origin em scripts e estilos, mas o precache não o envia;
+    // ignorar Vary somente nesta lista evita que o cache erre por esse cabeçalho.
+    event.respondWith((async () => (await (await caches.open(cacheName)).match(request, { ignoreVary: true })) || fetch(request))());
   }
 });
