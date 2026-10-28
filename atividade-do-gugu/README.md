@@ -19,7 +19,7 @@ Antes da V3, a navegação ainda não conectava os conteúdos de Administração
 - **Flashcards manuais:** pergunta, resposta, matéria, tema, dificuldade e fonte, com criação, edição, exclusão e sessões de revisão. A autoavaliação difícil/médio/fácil sugere retorno em 1/3/7 dias. Os contadores registram atividade, não acertos comprovados. “Difíceis” reúne cartões assim avaliados ou cadastrados inicialmente como difíceis.
 - **Pesquisa global local:** encontra ferramentas, áreas, trilhas, guias, cenários e conteúdos pessoais deste navegador. Não indexa PDFs externos. Os três guias anteriores de lógica, HTML/CSS e JavaScript continuam acessíveis como conteúdo extra pela área de desenvolvimento profissional; não executam código e não representam o currículo oficial.
 - **Experiência:** nove ilustrações originais geradas, otimizadas em WebP, ícones SVG locais, layout responsivo, modos claro/escuro, foco visível, navegação por teclado e respeito a movimento reduzido. As ilustrações representam objetos e ideias, não fotografias da escola ou de estudantes.
-- **Conta (em implantação):** interface para cadastro por e-mail e senha, confirmação de e-mail, entrada, saída e recuperação de senha com Supabase Auth. As ferramentas continuam disponíveis sem conta. O responsável informou que salvou o SMTP personalizado no Supabase, mas a aprovação do provedor e a entrega real de mensagens ainda precisam ser verificadas; os fluxos automatizados usam respostas simuladas.
+- **Conta (em implantação):** entrada somente pelo Google usando Supabase Auth. O serviço cria a conta no primeiro acesso e reconhece o usuário nos seguintes, conforme sua configuração; é possível sair da sessão. As ferramentas continuam disponíveis sem conta. A configuração do Google OAuth precisa ser confirmada e testada de verdade; os testes automatizados usam respostas simuladas.
 
 ### Premissas e limites do laboratório
 
@@ -32,7 +32,7 @@ Antes da V3, a navegação ainda não conectava os conteúdos de Administração
 
 **Os registros de estudo são locais, não privados por autenticação.** Entrar na conta não protege nem sincroniza as anotações, tarefas, favoritos ou quaisquer outros dados de estudo. Qualquer pessoa com acesso ao mesmo perfil do navegador pode lê-los ou alterá-los; não há backup automático. O navegador pode bloquear ou apagar o armazenamento; quando uma gravação falha, a interface avisa. Não inclua senhas, dados pessoais sensíveis, links privados ou dados de colegas ou empresas. Em dispositivo compartilhado, saia da conta, exporte o necessário e apague os dados em Configurações. Apagar os dados locais não encerra a sessão.
 
-A autenticação envia e-mail e senha ao Supabase por HTTPS; a gestão de credenciais é feita pelo Supabase Auth, não pelo código da plataforma. A sessão usa `sessionStorage` da aba, ou memória quando indisponível; não é exportada junto aos registros locais. Não há exclusão de conta na interface: o responsável deve providenciar atendimento às solicitações e definir política de retenção, privacidade e medidas para menores antes do uso real.
+A autenticação ocorre pelo Google e Supabase Auth com OAuth/PKCE por HTTPS; o aplicativo não recebe senha Google e deixa o SDK gerenciar a sessão em `sessionStorage` da aba. Recarregar mantém a sessão enquanto a aba durar; ela não é sincronizada entre abas e uma aba sem cópia dessa sessão exige nova entrada. O código PKCE precisa voltar na mesma aba; se o armazenamento da aba ou Web Crypto estiverem indisponíveis, o acesso é interrompido com aviso, sem tentar um fluxo de memória que não sobreviveria ao redirecionamento. A sessão não é exportada junto aos registros locais. Não há exclusão de conta na interface: o responsável deve providenciar atendimento às solicitações e definir política de retenção, privacidade e medidas para menores antes do uso real.
 
 A exportação JSON é uma cópia sob responsabilidade de quem a baixar; **não há importador integrado**. Links externos podem coletar dados segundo a política do site de destino; origem e disponibilidade não são verificadas automaticamente. O temporizador funciona somente enquanto a aplicação está aberta, sem serviço em segundo plano.
 
@@ -70,27 +70,36 @@ O projeto conectado ao GitHub usa **Root Directory: `atividade-do-gugu`** e o pr
 
 Se o log mostrar `vite: command not found`, confira primeiro o Root Directory: se ele apontar para a raiz do repositório, o Vercel não encontrará as dependências do aplicativo, que fica na subpasta. Após ajustar, faça um novo deploy e confirme a versão publicada; o erro de um deploy antigo não é alterado retroativamente.
 
-### Autenticação Supabase e pendências para uso público
+### Autenticação Google: configuração e pendências
 
-Um projeto Supabase separado foi criado para a autenticação, com confirmação de e-mail ativada e URL de produção definida. As variáveis públicas também foram configuradas no projeto Vercel para builds futuros; a implantação de produção não muda até que o código seja publicado. O SDK usa o fluxo de retorno por fragmento, que é processado e removido antes da navegação por hash. O allowlist de redirecionamento deve conter apenas URLs controladas; remova prévias temporárias quando não forem mais necessárias.
+O frontend foi preparado para `signInWithOAuth` com `provider: google` e PKCE. A volta usa um código de uso único na query, que é retirado da URL e trocado pelo SDK antes da navegação para `#/home`. Cancelamento, erro e links antigos não são tratados como autenticação bem-sucedida. Rotas antigas de conta mostram a tela Google, sem formulários anteriores. Não há confirmação, senha, códigos OTP, magic links nem recuperação por e-mail implementados no aplicativo.
 
-**Ainda não está pronto para cadastro público:**
+**O provedor Google foi ativado e uma verificação sem login chegou à tela do Google, mas o acesso real ainda não foi testado.** Isso não confirma o Client Secret nem a criação ou vinculação de contas. O projeto Supabase é `help-rds-auth`; a publicação de produção não muda até que este código seja publicado. Antes de retirar o método anterior, preserve o acesso existente e siga esta ordem:
 
-1. Validar o [SMTP personalizado no Supabase](https://supabase.com/docs/guides/auth/auth-smtp). O responsável informou ter autenticado `help-rds.de5.net` na Brevo e salvado as configurações SMTP no Supabase; isso não comprova ativação da plataforma transacional, envio ou entrega. Faça um teste real e acompanhe limites, validade e inatividade da chave. O endereço é um subdomínio gratuito cedido por terceiro, sujeito à renovação, e sua autenticação não cria uma caixa de entrada. Nunca cole credenciais SMTP no repositório ou em conversas.
-2. Ajustar a política de senha **no servidor** no painel Supabase antes de abrir cadastros. A interface solicita 8 caracteres, mas a configuração inicial observada no servidor aceita 6; validação no navegador não impede chamadas diretas.
-3. Definir responsável, política de privacidade/retenção e processo de exclusão de conta, incluindo requisitos aplicáveis a menores. Avaliar medidas antiautomatização e limites de envio sem desativar a confirmação de e-mail.
-4. Publicar o código e fazer teste real de cadastro, confirmação por e-mail, login, logout e recuperação em ambiente autorizado. Os testes de navegador atuais simulam o serviço e **não comprovam entrega de mensagens nem o fluxo real em produção**.
+1. No [Google Auth Platform](https://console.cloud.google.com/auth/overview), configure marca, público e tela de consentimento do Help RDS. Em **Data Access**, habilite os escopos básicos `openid`, `userinfo.email` e `userinfo.profile` conforme as instruções do Supabase. Se o app estiver em teste, inclua as contas de teste autorizadas; para disponibilização ampla, verifique os requisitos de publicação/verificação do Google e as políticas aplicáveis a menores. Não solicite permissões extras sem necessidade.
+2. Em **Clients**, crie um cliente OAuth do tipo **Web application**. Em **Authorized JavaScript origins**, adicione a origem de produção `https://rds-apoio-para-aprender.vercel.app` e, somente se necessário, a origem exata de uma prévia controlada ou `http://localhost:5173`. Em **Authorized redirect URIs**, adicione o callback do Supabase (não é a rota de conta do site):
 
-O Supabase Auth armazena as contas no serviço gerenciado; esta etapa não cria tabelas públicas nem envia registros de estudo. Uma consulta de privilégios confirmou que os papéis `anon` e `authenticated` não têm SELECT nem UPDATE direto em `auth.users`; isso não substitui testes completos de segurança. Caso sejam criadas tabelas futuramente, habilite RLS e teste efetivamente acesso negado sem sessão e entre usuários antes de armazenar qualquer dado privado.
+   ```text
+   https://mzjrfyuqsbumgkmwxplo.supabase.co/auth/v1/callback
+   ```
+
+3. No Supabase, abra **Authentication → Sign In / Providers → Google**, habilite o provedor e insira o Client ID e Client Secret gerados pelo Google diretamente no painel. Nunca coloque o Client Secret, chaves secretas do Supabase ou outras credenciais no frontend, repositório, logs ou conversa. Confirme que **Allow new users to sign up** não esteja desativado globalmente, pois isso também impediria o primeiro acesso Google.
+4. Em **Authentication → URL Configuration**, confira a Site URL de produção e inclua na lista de Redirect URLs o retorno exato `https://rds-apoio-para-aprender.vercel.app/`. Para testar em prévia, adicione também sua URL exata, com o caminho onde a aplicação está publicada e sem `#`; para desenvolvimento local, se usado, `http://localhost:5173/`. O aplicativo retorna à mesma origem/caminho em que o login começou. Use somente URLs controladas, evite curingas amplos e remova entradas temporárias após os testes.
+5. Publique primeiro em prévia autorizada e teste com consentimento: primeiro acesso, mesmo usuário após sair e entrar novamente, escolha/cancelamento da conta Google, retorno à página inicial, recarregamento, saída, falhas e preservação dos dados locais. Os testes automatizados simulam Google/Supabase e **não comprovam configuração, criação ou vinculação reais**. Defina responsável, política de privacidade/retenção e atendimento para exclusão de conta antes de uso público.
+6. **Somente após configurar e validar o Google** e organizar a migração dos usuários, desabilite o provedor **Email** em Authentication → Sign In / Providers → Email e salve. Revise se telefone, login anônimo, outros provedores ou SSO estão ativos e, quando aplicável e sem afetar outros consumidores, desabilite os métodos que não sejam Google. Verifique com testes autorizados que e-mail/senha e links/códigos antigos sejam recusados pela API. Não confunda desativar o provedor Email com desligar a confirmação de e-mail ou o cadastro global. Enquanto o método antigo permanecer habilitado no Supabase, sua API poderá aceitá-lo mesmo que a interface não o ofereça.
+
+As contas existentes não são apagadas nem recriadas por esta alteração de código. O Supabase pode [vincular automaticamente identidades](https://supabase.com/docs/guides/auth/auth-identity-linking) com o mesmo e-mail, conforme suas regras de verificação; ele pode remover identidades não confirmadas como proteção. Um endereço diferente não garante acesso à conta anterior. Avalie os usuários existentes e um procedimento seguro para casos que não se vinculem; não associe contas manualmente apenas pela semelhança de e-mail. A sessão da versão antiga usa outra chave e não é retomada automaticamente; sessões já emitidas em outros clientes não são revogadas por esta mudança e devem ser tratadas conforme a política do projeto. Nenhum usuário, tabela, dado escolar, política RLS ou configuração SMTP foi alterado aqui.
+
+O Supabase Auth armazena as contas no serviço gerenciado; esta etapa não cria tabelas públicas nem envia registros de estudo. Uma consulta anterior de privilégios confirmou que os papéis `anon` e `authenticated` não tinham SELECT nem UPDATE direto em `auth.users`; isso não substitui testes completos de segurança. Caso sejam criadas tabelas futuramente, habilite RLS e teste efetivamente acesso negado sem sessão e entre usuários antes de armazenar qualquer dado privado.
 
 ## Testes e qualidade
 
-- `npm test`: 35 testes unitários cobrindo os recursos anteriores e validação, mensagens, retornos e integração simulada da conta.
-- `npm run build`: compilação de produção. Os dois testes de navegador também passaram no build servido a partir de um subdiretório estático; confira novamente na hospedagem de destino.
+- `npm test`: testes unitários cobrindo os recursos anteriores, configuração, mensagens, retorno PKCE e integração simulada da conta.
+- `npm run build`: compilação de produção. Os testes de conta, fluxos gerais e Administração também passaram no build servido a partir de um subdiretório estático; confira novamente na hospedagem de destino.
 - `scripts/qa-browser.mjs`: fluxos anteriores, 38 rotas de ferramentas, dados locais, exclusões, busca, exportações e larguras de 320, 390, 768, 1024 e 1440 px.
 - `scripts/qa-admin.mjs`: trilhas e correção, simulação com vírgula, comparação, persistência, recuperação de dados inválidos, confirmações, carreira, compatibilidade com dados anteriores, busca, exportação, falha de armazenamento e as mesmas cinco larguras.
 - `scripts/qa-a11y.mjs`: axe WCAG 2/2.1 A/AA em 29 rotas, dois temas e duas larguras, incluindo exercícios e simulações preenchidas.
-- `scripts/qa-auth.mjs`: cadastro, login, sessão, logout e recuperação com respostas simuladas; acessibilidade nas rotas de conta em dois temas e duas larguras, e overflow em cinco larguras. Nenhum usuário real é criado. Testes automatizados não substituem avaliação humana de acessibilidade, conteúdo ou segurança.
+- `scripts/qa-auth.mjs`: OAuth/PKCE, retorno, segundo acesso, cancelamento, erros, sessão por aba, saída e preservação de dados locais com respostas simuladas; acessibilidade em dois temas e duas larguras, e overflow em cinco larguras. Nenhum usuário real é criado. Testes automatizados não substituem avaliação humana de acessibilidade, conteúdo ou segurança.
 
 Para reproduzir os testes opcionais, tenha um Chromium compatível e instale somente as dependências de teste, sem alterar o manifesto:
 
@@ -101,8 +110,10 @@ npm run dev
 CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-browser.mjs
 CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-admin.mjs
 CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-a11y.mjs
-CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-auth.mjs
-# APP_URL pode apontar para outra instância da aplicação
+# Em outro terminal, inicie um servidor separado com URL e chave fictícias:
+VITE_SUPABASE_URL=https://qa.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_mock npm run dev -- --port 5174 --strictPort
+# Em outro terminal, rode o teste contra essa instância simulada:
+APP_URL=http://127.0.0.1:5174/ CHROMIUM_PATH=/caminho/para/chromium node scripts/qa-auth.mjs
 ```
 
 ## Próximos passos e créditos

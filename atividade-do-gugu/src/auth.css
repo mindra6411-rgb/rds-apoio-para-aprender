@@ -11,18 +11,17 @@
 .auth-panel h2, .auth-aside h2 { margin: 9px 0; font-size: 23px; line-height: 1.2; letter-spacing: -.04em; overflow-wrap: anywhere; }
 .auth-panel > p, .auth-aside p { color: var(--muted); font-size: 12px; line-height: 1.65; }
 .auth-panel form { display: grid; gap: 14px; margin-top: 23px; }
-.auth-field { display: grid; gap: 7px; color: var(--ink); font-size: 11px; font-weight: 750; }
-.auth-field input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
-.auth-field input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .auth-panel form .button { justify-self: start; }
+.auth-panel .auth-google-button { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; max-width: 100%; padding: 10px 16px; border: 1px solid #747775; border-radius: 8px; background: #fff; color: #202124; font-size: 13px; font-weight: 700; }
+.auth-panel .auth-google-button:hover { background: #f4f6fb; }
+.auth-panel .auth-google-button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.auth-panel .auth-google-button:disabled { cursor: wait; opacity: .65; }
+.google-mark { flex: none; width: 20px; height: 20px; }
 .auth-panel .auth-hint { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
 .auth-panel > .auth-hint { margin-top: 15px; }
 .auth-panel .auth-feedback { min-height: 0; margin: 0; color: var(--accent); font-size: 12px; line-height: 1.5; }
 .auth-panel .auth-feedback:empty { display: none; }
 .auth-panel .auth-feedback.is-error { color: var(--danger-text); }
-.auth-panel .auth-switch { margin: 22px 0 0; }
-.auth-secondary { display: flex; flex-wrap: wrap; gap: 14px 22px; margin-top: 23px; }
-.auth-secondary a, .auth-switch a { color: var(--accent); font-size: 11px; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
 .auth-email { overflow-wrap: anywhere; }
 .auth-aside { background: var(--surface-muted); }
 .auth-aside-icon { display: grid; place-items: center; width: 43px; height: 43px; margin-bottom: 20px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }

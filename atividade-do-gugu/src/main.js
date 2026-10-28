@@ -3,7 +3,7 @@ import './design-components.css';
 import './visual.css';
 import './admin.css';
 import './auth.css';
-import { validAuthConfig, createBrowserAuthClient, inspectAuthCallback, redirectUrl, callbackDestination, validateAccountForm, accountError, accountApi } from './auth.js';
+import { validAuthConfig, createBrowserAuthClient, hasSavedAuthSession, inspectAuthCallback, redirectUrl, callbackDestination, accountError, accountApi } from './auth.js';
 import { accountPage, accountLink } from './auth-pages.js';
 import { icon } from './icons.js';
 import { images } from './assets.js';
@@ -17,11 +17,14 @@ import { calculate, money } from './calculations.js';
 import { getPrefs, savePrefs, getRecords, saveRecords, getDraft, saveDraft, clearDraft, clearAllLocalData, exportLocalData } from './storage.js';
 
 const app = document.querySelector('#app');
-// Capture os metadados antes de o SDK consumir e limpar o fragmento de autenticação.
+// Retire o retorno da URL imediatamente; o código PKCE vive só em memória até
+// ser entregue ao SDK, nunca no estado da interface ou nos dados de estudo.
 const initialAuthCallback = inspectAuthCallback(location.href);
+let initialAuthCode = initialAuthCallback?.hasCode ? new URL(location.href).searchParams.get('code') : null;
+if (initialAuthCallback) history.replaceState(history.state, '', callbackDestination(location.href, 'conta'));
 const authUrl = import.meta.env.VITE_SUPABASE_URL;
 const authKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const authState = { configured: validAuthConfig(authUrl, authKey), ready: false, user: null, recovery: false, notice: null };
+const authState = { configured: validAuthConfig(authUrl, authKey), ready: false, user: null, problem: null, notice: null };
 let authClient = null;
 let authApi = null;
 let authStarted = false;
@@ -230,7 +233,7 @@ function render() {
   else if (page === 'flashcards') { title = 'Flashcards'; content = flashcardsPage(getRecords('flashcards'), flashState); }
   else if (page === 'tecnologia') { title = parts[1] ? (findGuide(parts[1])?.title || 'Tecnologia') : 'Tecnologia'; content = parts[1] ? guidePage(findGuide(parts[1])) : technologyPage(); active = 'tecnologia'; }
   else if (page === 'busca') { title = 'Busca'; content = searchResultsPage(searchQuery, searchItems(searchQuery)); }
-  else if (page === 'conta') { title = 'Minha conta'; content = accountPage({ ...authState, mode: parts[1] || '', notice: authState.notice?.route === currentRoute ? authState.notice : null }); }
+  else if (page === 'conta') { title = 'Minha conta'; content = accountPage({ ...authState, notice: authState.notice?.route === currentRoute ? authState.notice : null }); }
   else if (page === 'settings') { title = 'Configurações'; content = settingsPage(); }
   else if (page === 'about') { title = 'Sobre o projeto'; content = aboutPage(); }
   else { title = 'Página não encontrada'; content = emptyState('Esta página não foi encontrada.', 'Confira o endereço ou volte para explorar as ferramentas.'); }
@@ -270,96 +273,99 @@ async function handleAccountSubmit(event) {
   event.preventDefault();
   if (!authApi || accountActionPending) return;
   const form = event.currentTarget;
-  const mode = form.dataset.mode;
-  if (!['sign-in', 'sign-up', 'recovery', 'new-password'].includes(mode)) return;
-  if (mode === 'new-password' && !authState.recovery) { accountFeedback(form, 'Solicite um novo link de recuperação.', true); return; }
-  const values = Object.fromEntries(new FormData(form));
-  const validation = validateAccountForm(mode, values);
-  if (validation) { accountFeedback(form, validation, true); return; }
   const button = form.querySelector('button[type="submit"]');
   accountActionPending = true;
   if (button) button.disabled = true;
-  accountFeedback(form, 'Aguarde...');
+  accountFeedback(form, 'Redirecionando para o Google...');
+  let redirectStarted = false;
   try {
-    let result;
-    if (mode === 'sign-in') result = await authApi.signIn(values);
-    if (mode === 'sign-up') result = await authApi.signUp(values);
-    if (mode === 'recovery') result = await authApi.requestRecovery(values);
-    if (mode === 'new-password') result = await authApi.changePassword(values);
-    if (result?.error) { accountFeedback(form, accountError(result.error), true); return; }
-    if (mode === 'sign-in') {
-      if (!result?.data?.session) { accountFeedback(form, 'Não foi possível verificar a sessão. Tente novamente.', true); return; }
-      authState.user = result.data.user || result.data.session.user;
-      authState.recovery = false;
-      accountNavigate('conta', 'Você entrou na sua conta.');
-    } else if (mode === 'sign-up' && result?.data?.session) {
-      authState.user = result.data.user || result.data.session.user;
-      accountNavigate('conta', 'Sua conta foi criada.');
-    } else if (mode === 'sign-up') {
-      form.reset();
-      accountFeedback(form, 'Se esse endereço puder receber mensagens, confira seu e-mail para confirmar o cadastro.');
-    } else if (mode === 'recovery') {
-      form.reset();
-      accountFeedback(form, 'Se for possível enviar uma mensagem para esse endereço, confira seu e-mail para receber o link.');
-    } else {
-      authState.recovery = false;
-      accountNavigate('conta', 'Senha atualizada.');
+    const result = await authApi.signInWithGoogle();
+    if (result?.error || !result?.data?.url) {
+      accountFeedback(form, accountError(result?.error), true);
+      return;
     }
+    // O SDK redireciona a própria aba. Evite dois fluxos PKCE simultâneos.
+    redirectStarted = true;
+    setTimeout(() => {
+      accountActionPending = false;
+      if (!form.isConnected) return;
+      if (button) button.disabled = false;
+      accountFeedback(form, 'Não foi possível abrir o Google. Tente novamente.', true);
+    }, 10000);
   } catch {
-    accountFeedback(form, 'Não foi possível concluir agora. Confira sua conexão e tente novamente.', true);
+    accountFeedback(form, 'Não foi possível entrar com Google agora. Confira sua conexão e tente novamente.', true);
   } finally {
-    accountActionPending = false;
-    if (button?.isConnected) button.disabled = false;
+    if (!redirectStarted) {
+      accountActionPending = false;
+      if (button?.isConnected) button.disabled = false;
+    }
   }
 }
 
 async function initializeAccount() {
-  authClient = authState.configured ? await createBrowserAuthClient(authUrl, authKey) : null;
+  const result = await createBrowserAuthClient(authUrl, authKey);
+  authClient = result.client;
+  authState.problem = result.problem;
   if (!authClient) {
-    authState.configured = false;
+    initialAuthCode = null;
     authState.ready = true;
-    if (initialAuthCallback) accountNavigate('conta/entrar', 'O acesso por conta não está configurado neste ambiente. Solicite um novo link depois.', 'error');
     authBooting = false;
     if (initialAuthCallback || route().split('/')[0] === 'conta') render();
+    if (initialAuthCallback) document.querySelector('#main-content')?.focus({ preventScroll: true });
     return;
   }
   authApi = accountApi(authClient, redirectUrl(location.href));
   authClient.auth.onAuthStateChange((event, session) => {
     const previousUser = authState.user?.id || null;
-    const previousRecovery = authState.recovery;
     authState.user = session?.user || null;
-    if (event === 'PASSWORD_RECOVERY') authState.recovery = true;
-    if (event === 'SIGNED_OUT') authState.recovery = false;
-    const changed = previousUser !== (authState.user?.id || null) || previousRecovery !== authState.recovery;
-    // Não faça chamadas ao SDK dentro deste callback: apenas atualize a interface.
-    // Eventos duplicados, em especial INITIAL_SESSION, não podem apagar um formulário em edição.
+    const changed = previousUser !== (authState.user?.id || null);
+    // Não faça chamadas ao SDK dentro deste callback; eventos duplicados não
+    // devem apagar uma ação em andamento ou re-renderizar desnecessariamente.
     if (changed && authState.ready && !authBooting) {
       updateAccountLink();
       if (!accountActionPending && route().split('/')[0] === 'conta') render();
     }
   });
+  let callbackSucceeded = false;
+  const callbackError = text => { authState.notice = { route: 'conta', text, kind: 'error' }; };
   try {
-    const initialization = await authClient.auth.initialize();
+    await authClient.auth.initialize();
+    if (initialAuthCallback) {
+      if (initialAuthCallback.hasLegacyToken) {
+        callbackError('Este link de acesso antigo não é mais aceito. Entre com Google.');
+      } else if (initialAuthCallback.hasError) {
+        callbackError(initialAuthCallback.cancelled ? 'A entrada com Google foi cancelada. Você pode tentar novamente.' : 'Não foi possível concluir o acesso com Google. Tente novamente.');
+      } else if (initialAuthCode) {
+        // Só o SDK troca o código pelo login; não inferimos sucesso de uma sessão anterior.
+        const code = initialAuthCode;
+        initialAuthCode = null;
+        const exchange = await authApi.exchangeCode(code);
+        callbackSucceeded = !exchange?.error && Boolean(exchange?.data?.session?.user);
+        if (!callbackSucceeded) callbackError('Não foi possível concluir o acesso com Google. O retorno pode ter expirado; tente novamente nesta aba.');
+      } else {
+        callbackError('Não foi possível concluir o acesso com Google. Tente novamente nesta aba.');
+      }
+    }
     const { data, error } = await authClient.auth.getSession();
     authState.user = data?.session?.user || null;
-    if (initialAuthCallback) {
-      const ok = !initialization?.error && !error && !initialAuthCallback.hasError && initialAuthCallback.hasToken && Boolean(data?.session);
-      const target = ok && initialAuthCallback.purpose === 'recovery' ? 'conta/redefinir' : (ok ? 'conta' : 'conta/entrar');
-      authState.recovery = ok && initialAuthCallback.purpose === 'recovery';
-      const text = ok ? (authState.recovery ? 'Agora você pode escolher uma nova senha.' : 'E-mail confirmado. Você está conectado.') : 'O link é inválido ou expirou. Solicite outro link.';
-      authState.notice = { route: target, text, kind: ok ? 'success' : 'error' };
-      history.replaceState(history.state, '', callbackDestination(location.href, target));
+    if (callbackSucceeded && !error && authState.user) {
+      authState.notice = null;
+      history.replaceState(history.state, '', callbackDestination(location.href, 'home'));
+    } else if (callbackSucceeded) {
+      callbackSucceeded = false;
+      callbackError('Não foi possível verificar sua sessão. Tente entrar novamente.');
     }
   } catch {
-    if (initialAuthCallback) {
-      authState.notice = { route: 'conta/entrar', text: 'Não foi possível validar o link. Solicite outro e tente novamente.', kind: 'error' };
-      history.replaceState(history.state, '', callbackDestination(location.href, 'conta/entrar'));
-    }
+    callbackSucceeded = false;
+    if (initialAuthCallback) callbackError('Não foi possível concluir o acesso com Google. Confira sua conexão e tente novamente.');
   } finally {
+    initialAuthCode = null;
     authState.ready = true;
     authBooting = false;
     if (initialAuthCallback || route().split('/')[0] === 'conta') render();
     else updateAccountLink();
+    if (initialAuthCallback) document.querySelector('#main-content')?.focus({ preventScroll: true });
+    if (callbackSucceeded) toast('Você entrou com Google.');
   }
 }
 
@@ -653,11 +659,10 @@ app.addEventListener('click', async event => {
       const { error } = await authApi.signOut();
       if (error) {
         const feedback = document.querySelector('#auth-feedback');
-        if (feedback) { feedback.textContent = accountError(error); feedback.classList.add('is-error'); }
+        if (feedback) { feedback.textContent = 'Não foi possível sair. Confira sua conexão e tente novamente.'; feedback.classList.add('is-error'); }
       } else {
         authState.user = null;
-        authState.recovery = false;
-        accountNavigate('conta/entrar', 'Você saiu da conta nesta aba.');
+        accountNavigate('conta', 'Você saiu da conta nesta aba.');
       }
     } catch {
       const feedback = document.querySelector('#auth-feedback');
@@ -886,10 +891,10 @@ document.addEventListener('keydown', event => {
 window.addEventListener('resize', () => syncMobileMenu(false));
 window.addEventListener('hashchange', () => {
   if (authBooting) return;
-  // Um link aberto na aba atual pode mudar só o fragmento, sem recarregar a aplicação.
-  // Reinicie o SDK para que valide e remova os tokens antes de tratar a rota.
+  // Um link antigo ou erro aberto na aba atual pode mudar só o fragmento.
+  // Recarregue para limpar o retorno antes de tratar a rota.
   if (inspectAuthCallback(location.href)) { location.reload(); return; }
-  // Eventos de fragmento atrasados podem chegar após o SDK ou a navegação já ter renderizado a mesma rota.
+  // Eventos de fragmento atrasados podem chegar após a navegação já ter renderizado a mesma rota.
   if (route() === lastRenderedRoute) return;
   render();
   window.scrollTo(0,0);
@@ -897,7 +902,5 @@ window.addEventListener('hashchange', () => {
 });
 if (authBooting) app.innerHTML = '<main id="main-content" tabindex="-1"><p role="status">Validando seu acesso...</p></main>';
 else render();
-// Só carregue o SDK no início se há sessão nesta aba ou um retorno de autenticação.
-let hasSavedSession = false;
-try { hasSavedSession = Boolean(sessionStorage.getItem('help-rds-auth-session')); } catch {}
-if (initialAuthCallback || hasSavedSession) ensureAccountInitialized();
+// Só carregue o SDK no início se há sessão Google nesta aba ou retorno de autenticação.
+if (initialAuthCallback || hasSavedAuthSession()) ensureAccountInitialized();
