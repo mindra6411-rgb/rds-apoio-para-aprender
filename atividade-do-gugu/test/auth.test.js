@@ -1,73 +1,129 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validAuthConfig, inspectAuthCallback, redirectUrl, callbackDestination, validateAccountForm, accountError, accountApi } from '../src/auth.js';
+import { AUTH_STORAGE_KEY, validAuthConfig, authStorage, hasSavedAuthSession, createBrowserAuthClient, inspectAuthCallback, redirectUrl, callbackDestination, accountError, accountApi } from '../src/auth.js';
 import { accountPage, accountLink } from '../src/auth-pages.js';
+
+function fakeStorage(initial = {}) {
+  const values = new Map(Object.entries(initial));
+  return {
+    values,
+    getItem(key) { return values.has(key) ? values.get(key) : null; },
+    setItem(key, value) { values.set(key, String(value)); },
+    removeItem(key) { values.delete(key); },
+  };
+}
 
 test('autenticação aceita somente URL HTTPS limpa e chave publicável', () => {
   assert.equal(validAuthConfig('https://example.supabase.co', 'sb_publishable_example'), true);
   assert.equal(validAuthConfig('http://example.supabase.co', 'sb_publishable_example'), false);
   assert.equal(validAuthConfig('https://user:password@example.supabase.co', 'sb_publishable_example'), false);
   assert.equal(validAuthConfig('https://example.supabase.co/path', 'sb_publishable_example'), false);
+  assert.equal(validAuthConfig('https://example.supabase.co?x=1', 'sb_publishable_example'), false);
   assert.equal(validAuthConfig('https://example.supabase.co', 'sb_secret_example'), false);
   assert.equal(validAuthConfig('', ''), false);
 });
 
-test('retornos da autenticação são separados das rotas e não preservam tokens', () => {
-  assert.equal(inspectAuthCallback('https://example.test/#/conta'), null);
-  const callback = inspectAuthCallback('https://example.test/#access_token=private&refresh_token=private&type=recovery');
-  assert.deepEqual(callback, { hasError: false, hasToken: true, purpose: 'recovery' });
-  assert.equal(JSON.stringify(callback).includes('private'), false);
-  assert.deepEqual(inspectAuthCallback('https://example.test/#error=access_denied&error_code=otp_expired'), { hasError: true, hasToken: false, purpose: 'confirmation' });
+test('código PKCE é reconhecido sem ser incluído nos metadados e é removido da URL', () => {
+  assert.equal(inspectAuthCallback('https://example.test/?campaign=1#/conta'), null);
+  const href = 'https://example.test/subdir/?code=valor-privado&state=outro#/conta';
+  const callback = inspectAuthCallback(href);
+  assert.deepEqual(callback, { hasCode: true, hasError: false, hasLegacyToken: false, cancelled: false });
+  assert.equal(JSON.stringify(callback).includes('valor-privado'), false);
+  assert.equal(callbackDestination(href, 'home'), '/subdir/#/home');
   assert.equal(redirectUrl('https://example.test/subdir/?a=b#/conta'), 'https://example.test/subdir/');
-  assert.equal(callbackDestination('https://example.test/subdir/#access_token=private', 'conta/redefinir'), '/subdir/#/conta/redefinir');
+  assert.equal(inspectAuthCallback('não é uma URL'), null);
 });
 
-test('formulários validam e-mail, senha e confirmação sem impedir senhas antigas no login', () => {
-  assert.match(validateAccountForm('sign-in', { email: 'inválido', password: 'a' }), /e-mail/i);
-  assert.equal(validateAccountForm('sign-in', { email: 'test@example.test', password: 'short' }), '');
-  assert.match(validateAccountForm('sign-up', { email: 'test@example.test', password: '123', confirmPassword: '123' }), /8 caracteres/);
-  assert.match(validateAccountForm('new-password', { password: '12345678', confirmPassword: 'diferente' }), /não coincidem/);
-  assert.equal(validateAccountForm('new-password', { password: '12345678', confirmPassword: '12345678' }), '');
-  assert.equal(validateAccountForm('recovery', { email: ' test@example.test ' }), '');
+test('retornos negados e links antigos são reconhecidos sem expor mensagens ou tokens', () => {
+  assert.deepEqual(inspectAuthCallback('https://example.test/?error=access_denied&error_description=texto-privado'),
+    { hasCode: false, hasError: true, hasLegacyToken: false, cancelled: true });
+  assert.deepEqual(inspectAuthCallback('https://example.test/#error=access_denied&error_code=outro'),
+    { hasCode: false, hasError: true, hasLegacyToken: false, cancelled: true });
+  const legacy = inspectAuthCallback('https://example.test/#access_token=privado&refresh_token=privado&type=recovery');
+  assert.deepEqual(legacy, { hasCode: false, hasError: false, hasLegacyToken: true, cancelled: false });
+  assert.equal(JSON.stringify(legacy).includes('privado'), false);
+  assert.equal(callbackDestination('https://example.test/subdir/?code=privado#access_token=privado'), '/subdir/#/conta');
 });
 
-test('erros do provedor são traduzidos sem expor texto arbitrário', () => {
-  assert.match(accountError({ code: 'invalid_credentials' }), /inválidos/);
-  assert.match(accountError({ code: 'email_not_confirmed' }), /Confirme/);
+test('armazenamento da aba preserva dados existentes e reconhece apenas a sessão Google', () => {
+  const storage = fakeStorage({ 'help-rds-auth-session': 'sessão-antiga', 'outro-dado': 'mantido' });
+  const browser = { sessionStorage: storage };
+  assert.equal(authStorage(browser), storage);
+  assert.deepEqual([...storage.values.entries()], [['help-rds-auth-session', 'sessão-antiga'], ['outro-dado', 'mantido']]);
+  assert.equal(hasSavedAuthSession(browser), false);
+  storage.setItem(AUTH_STORAGE_KEY, 'sessão-do-sdk');
+  assert.equal(hasSavedAuthSession(browser), true);
+  assert.notEqual(AUTH_STORAGE_KEY, 'help-rds-auth-session');
+});
+
+test('armazenamento bloqueado não é tratado como se sobrevivesse ao redirecionamento', () => {
+  const browser = { get sessionStorage() { throw new Error('bloqueado'); } };
+  assert.equal(authStorage(browser), null);
+  assert.equal(hasSavedAuthSession(browser), false);
+  const fullStorage = { setItem() { throw new Error('sem espaço'); } };
+  assert.equal(authStorage({ sessionStorage: fullStorage }), null);
+  assert.equal(authStorage({}), null);
+});
+
+test('cliente não é criado com configuração inválida', async () => {
+  assert.deepEqual(await createBrowserAuthClient('https://example.supabase.co', 'sb_secret_example'), { client: null, problem: 'configuration' });
+});
+
+test('cliente recusa contexto inseguro e armazenamento bloqueado antes de iniciar OAuth', async () => {
+  const originalSecure = Object.getOwnPropertyDescriptor(globalThis, 'isSecureContext');
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  try {
+    Object.defineProperty(globalThis, 'isSecureContext', { value: false, configurable: true });
+    assert.deepEqual(await createBrowserAuthClient('https://example.supabase.co', 'sb_publishable_example'), { client: null, problem: 'secure' });
+    Object.defineProperty(globalThis, 'isSecureContext', { value: true, configurable: true });
+    Object.defineProperty(globalThis, 'window', { value: { get sessionStorage() { throw new Error('bloqueado'); } }, configurable: true });
+    assert.deepEqual(await createBrowserAuthClient('https://example.supabase.co', 'sb_publishable_example'), { client: null, problem: 'storage' });
+  } finally {
+    if (originalSecure) Object.defineProperty(globalThis, 'isSecureContext', originalSecure); else delete globalThis.isSecureContext;
+    if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow); else delete globalThis.window;
+  }
+});
+
+test('erros são traduzidos sem expor texto arbitrário do provedor', () => {
   assert.match(accountError({ status: 429 }), /Aguarde/);
-  assert.equal(accountError({ message: '<script>privado</script>' }).includes('script'), false);
+  assert.match(accountError({ code: 'over_email_send_rate_limit' }), /Aguarde/);
+  assert.match(accountError({ message: '<script>privado</script>' }), /Google/);
+  assert.doesNotMatch(accountError({ message: '<script>privado</script>' }), /script|privado/);
 });
 
-test('adaptador chama o serviço de autenticação e não envia outras informações', async () => {
+test('adaptador usa apenas Google OAuth, troca PKCE pelo SDK e sai da sessão local', async () => {
   const calls = [];
   const fake = { auth: {
-    signInWithPassword: async value => { calls.push(['sign-in', value]); return { data: {}, error: null }; },
-    signUp: async value => { calls.push(['sign-up', value]); return { data: {}, error: null }; },
-    resetPasswordForEmail: async (...args) => { calls.push(['recovery', ...args]); return { error: null }; },
-    updateUser: async value => { calls.push(['update', value]); return { error: null }; },
+    signInWithOAuth: async value => { calls.push(['oauth', value]); return { data: { url: 'https://example.test' }, error: null }; },
+    exchangeCodeForSession: async code => { calls.push(['exchange', code]); return { data: {}, error: null }; },
     signOut: async value => { calls.push(['sign-out', value]); return { error: null }; },
   } };
-  const api = accountApi(fake, 'https://example.test/');
-  await api.signIn({ email: ' test@example.test ', password: 'password', unused: 'não enviar' });
-  await api.signUp({ email: 'test@example.test', password: 'password', confirmPassword: 'password' });
-  await api.requestRecovery({ email: ' test@example.test ' });
-  await api.changePassword({ password: 'new-password' });
+  const api = accountApi(fake, 'https://example.test/subdir/');
+  await api.signInWithGoogle();
+  await api.exchangeCode('código-de-teste');
   await api.signOut();
   assert.deepEqual(calls, [
-    ['sign-in', { email: 'test@example.test', password: 'password' }],
-    ['sign-up', { email: 'test@example.test', password: 'password', options: { emailRedirectTo: 'https://example.test/' } }],
-    ['recovery', 'test@example.test', { redirectTo: 'https://example.test/' }],
-    ['update', { password: 'new-password' }],
+    ['oauth', { provider: 'google', options: { redirectTo: 'https://example.test/subdir/', queryParams: { prompt: 'select_account' } } }],
+    ['exchange', 'código-de-teste'],
     ['sign-out', { scope: 'local' }],
   ]);
+  assert.deepEqual(Object.keys(api).sort(), ['exchangeCode', 'signInWithGoogle', 'signOut']);
 });
 
-test('páginas avisam sobre dados locais e escapam e-mail retornado pelo serviço', () => {
-  const signedIn = accountPage({ configured: true, ready: true, user: { email: '<img src=x onerror=alert(1)>' } });
-  assert.doesNotMatch(signedIn, /<img/);
+test('página de visitante oferece somente Google e explica os limites dos dados locais', () => {
+  const guest = accountPage({ configured: true, ready: true, user: null });
+  assert.match(guest, /Entrar com Google/);
+  assert.doesNotMatch(guest, /<input|type="password"|conta\/(cadastro|recuperar|redefinir)/);
+  assert.match(guest, /não são sincronizados nem protegidos pelo login/);
+  assert.match(accountLink(null), /Entrar com Google/);
+});
+
+test('páginas escapam dados do usuário e apresentam erros de configuração ou armazenamento', () => {
+  const signedIn = accountPage({ configured: true, ready: true, user: { email: '<img src=x onerror=alert(1)>' }, notice: { text: '<script>não</script>' } });
+  assert.doesNotMatch(signedIn, /<img|<script>/);
   assert.match(signedIn, /&lt;img/);
-  assert.match(signedIn, /não são sincronizados nem protegidos pelo login/);
+  assert.match(signedIn, /&lt;script&gt;/);
   assert.match(accountPage({ configured: false, ready: true }), /indisponível/);
-  assert.match(accountPage({ configured: true, ready: true, mode: 'redefinir', recovery: false }), /link não está ativo/);
-  assert.match(accountLink(null), /Entrar/);
+  assert.match(accountPage({ configured: true, ready: true, problem: 'storage' }), /bloqueou o armazenamento/);
+  assert.match(accountPage({ configured: true, ready: true, problem: 'secure' }), /conexão segura/);
 });
