@@ -2,6 +2,9 @@ import './styles.css';
 import './design-components.css';
 import './visual.css';
 import './admin.css';
+import './auth.css';
+import { validAuthConfig, createBrowserAuthClient, inspectAuthCallback, redirectUrl, callbackDestination, validateAccountForm, accountError, accountApi } from './auth.js';
+import { accountPage, accountLink } from './auth-pages.js';
 import { icon } from './icons.js';
 import { images } from './assets.js';
 import { normalize, localDate, isValidDate, deadlines, upcomingDeadlines, calendarIcs, safeHttpUrl, canonicalUrl, rateFlashcard, guides, findGuide } from './study.js';
@@ -14,6 +17,16 @@ import { calculate, money } from './calculations.js';
 import { getPrefs, savePrefs, getRecords, saveRecords, getDraft, saveDraft, clearDraft, clearAllLocalData, exportLocalData } from './storage.js';
 
 const app = document.querySelector('#app');
+// Capture os metadados antes de o SDK consumir e limpar o fragmento de autenticação.
+const initialAuthCallback = inspectAuthCallback(location.href);
+const authUrl = import.meta.env.VITE_SUPABASE_URL;
+const authKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const authState = { configured: validAuthConfig(authUrl, authKey), ready: false, user: null, recovery: false, notice: null };
+let authClient = null;
+let authApi = null;
+let authStarted = false;
+let authBooting = Boolean(initialAuthCallback);
+let accountActionPending = false;
 let prefs = getPrefs();
 let currentResult = null;
 let businessPreview = null;
@@ -70,7 +83,7 @@ function categoryTile(category) {
 }
 function sidebar(active) {
   const primary = [['home','home','Início'],['vida-escolar','book','Vida escolar'],['administracao','layers','Administração'],['laboratorio','calculator','Laboratório'],['carreira','target','Meu futuro'],['catalog','grid','Ferramentas']];
-  const personal = [['materias','book','Minhas matérias'],['agenda','calendar','Agenda'],['biblioteca','library','Minha biblioteca'],['flashcards','cards','Flashcards'],['tool/anotacoes','note','Minhas anotações'],['favorites','heart','Favoritos'],['recent','clock','Recentes']];
+  const personal = [['conta','users','Minha conta'],['materias','book','Minhas matérias'],['agenda','calendar','Agenda'],['biblioteca','library','Minha biblioteca'],['flashcards','cards','Flashcards'],['tool/anotacoes','note','Minhas anotações'],['favorites','heart','Favoritos'],['recent','clock','Recentes']];
   const nav = links => links.map(([id,ic,label])=>`<a href="#/${id}" class="nav-link ${active===id?'active':''}" ${active===id?'aria-current="page"':''}><span class="nav-icon">${icon(ic)}</span><span>${label}</span>${id==='favorites'&&prefs.favorites.length?`<span class="nav-count">${prefs.favorites.length}</span>`:''}</a>`).join('');
   return `<aside class="sidebar" id="sidebar"><a href="#/home" class="wordmark"><span class="brand-mark" aria-hidden="true"><span></span></span><span class="brand-type"><strong>help<span>.</span>rds</strong><small>ESTUDOS &amp; ADMINISTRAÇÃO</small></span></a><button type="button" class="sidebar-close icon-button" data-action="menu-close" aria-label="Fechar navegação">${icon('close')}</button>
     <div class="side-label">MENU PRINCIPAL</div><nav class="main-nav" aria-label="Navegação principal">${nav(primary)}</nav>
@@ -80,7 +93,7 @@ function sidebar(active) {
 }
 function shell(content, active, pageTitle='Help RDS') {
   document.title = `${pageTitle} — Help RDS`;
-  return `<a class="skip-link" href="#main-content" data-action="skip-main">Pular para o conteúdo</a><div class="app-shell">${sidebar(active)}<div class="main-area"><header class="topbar"><button class="mobile-menu icon-button" data-action="menu" aria-label="Abrir navegação" aria-controls="sidebar" aria-expanded="false">${icon('menu')}</button><div class="breadcrumbs"><span>SEU ESPAÇO</span><span class="crumb-divider">/</span><strong>${esc(pageTitle)}</strong></div><div class="top-actions"><div class="search-wrap" role="search">${icon('search')}<input id="global-search" type="search" placeholder="Buscar no seu espaço..." autocomplete="off" aria-label="Buscar ferramentas e conteúdos" /><kbd>Ctrl K</kbd></div><button class="theme-switch" data-action="theme" aria-label="Alternar para tema ${prefs.theme==='dark'?'claro':'escuro'}" title="Alternar tema">${icon(prefs.theme==='dark'?'sun':'moon')}</button><span class="header-student"><span class="header-avatar">H</span><span>Seu espaço<small>feito para aprender</small></span></span></div></header><main id="main-content" tabindex="-1">${content}</main><footer class="site-footer"><span><strong>help.rds</strong> <span class="footer-sep">·</span> Um espaço independente de apoio ao estudo.</span><a href="#/about">Sobre e créditos ${icon('arrowUp')}</a></footer></div></div><dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description"><form method="dialog"><span class="eyebrow">CONFIRMAÇÃO</span><h2 id="confirm-title">Confirmar ação</h2><p id="confirm-description"></p><div class="dialog-actions"><button type="submit" value="cancel" class="button button-quiet">Cancelar</button><button type="submit" value="confirm" class="button button-danger" id="confirm-submit">Confirmar</button></div></form></dialog><div id="toast" role="status" aria-live="polite" class="toast"></div>`;
+  return `<a class="skip-link" href="#main-content" data-action="skip-main">Pular para o conteúdo</a><div class="app-shell">${sidebar(active)}<div class="main-area"><header class="topbar"><button class="mobile-menu icon-button" data-action="menu" aria-label="Abrir navegação" aria-controls="sidebar" aria-expanded="false">${icon('menu')}</button><div class="breadcrumbs"><span>SEU ESPAÇO</span><span class="crumb-divider">/</span><strong>${esc(pageTitle)}</strong></div><div class="top-actions"><div class="search-wrap" role="search">${icon('search')}<input id="global-search" type="search" placeholder="Buscar no seu espaço..." autocomplete="off" aria-label="Buscar ferramentas e conteúdos" /><kbd>Ctrl K</kbd></div><button class="theme-switch" data-action="theme" aria-label="Alternar para tema ${prefs.theme==='dark'?'claro':'escuro'}" title="Alternar tema">${icon(prefs.theme==='dark'?'sun':'moon')}</button>${accountLink(authState.user)}</div></header><main id="main-content" tabindex="-1">${content}</main><footer class="site-footer"><span><strong>help.rds</strong> <span class="footer-sep">·</span> Um espaço independente de apoio ao estudo.</span><a href="#/about">Sobre e créditos ${icon('arrowUp')}</a></footer></div></div><dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description"><form method="dialog"><span class="eyebrow">CONFIRMAÇÃO</span><h2 id="confirm-title">Confirmar ação</h2><p id="confirm-description"></p><div class="dialog-actions"><button type="submit" value="cancel" class="button button-quiet">Cancelar</button><button type="submit" value="confirm" class="button button-danger" id="confirm-submit">Confirmar</button></div></form></dialog><div id="toast" role="status" aria-live="polite" class="toast"></div>`;
 }
 function homePage() {
   const recent = prefs.recent.map(id=>findTool(id)).find(Boolean);
@@ -161,10 +174,10 @@ function toolPage(tool) {
   return tool.type==='calculator'?calculatorPage(tool):recordsPage(tool);
 }
 function settingsPage() {
-  return `<section class="page-intro"><div><span class="eyebrow">PREFERÊNCIAS</span><h1>Configurações</h1><p>Personalize sua experiência e controle seus dados locais.</p></div></section><div class="settings-list"><section class="settings-item"><div><span class="eyebrow">APARÊNCIA</span><h2>Tema da plataforma</h2><p>Escolha como o Help RDS aparece neste dispositivo.</p></div><div class="segmented-control"><button data-action="set-theme" data-value="light" class="${prefs.theme==='light'?'selected':''}" aria-pressed="${prefs.theme==='light'}">Claro</button><button data-action="set-theme" data-value="dark" class="${prefs.theme==='dark'?'selected':''}" aria-pressed="${prefs.theme==='dark'}">Escuro</button></div></section><section class="settings-item"><div><span class="eyebrow">SEUS DADOS</span><h2>Armazenamento local</h2><p>Favoritos, histórico e registros de ferramentas ficam somente no armazenamento deste navegador. Não é necessário criar conta. Quem usa o mesmo perfil de navegador também pode acessar esses registros; não há sincronização nem backup automático.</p></div><button class="button button-quiet" data-action="export-all">Exportar meus dados</button></section><section class="settings-item settings-danger"><div><span class="eyebrow">PRIVACIDADE</span><h2>Apagar dados deste dispositivo</h2><p>Remove favoritos, histórico, preferências e registros salvos no Help RDS neste navegador. Esta ação não pode ser desfeita.</p></div><button class="button button-danger" data-action="clear-data">Apagar dados locais</button></section><p class="settings-note">Use um dispositivo compartilhado? Exporte o que deseja guardar e limpe seus dados locais ao terminar.</p></div>`;
+  return `<section class="page-intro"><div><span class="eyebrow">PREFERÊNCIAS</span><h1>Configurações</h1><p>Personalize sua experiência e controle seus dados locais.</p></div></section><div class="settings-list"><section class="settings-item"><div><span class="eyebrow">APARÊNCIA</span><h2>Tema da plataforma</h2><p>Escolha como o Help RDS aparece neste dispositivo.</p></div><div class="segmented-control"><button data-action="set-theme" data-value="light" class="${prefs.theme==='light'?'selected':''}" aria-pressed="${prefs.theme==='light'}">Claro</button><button data-action="set-theme" data-value="dark" class="${prefs.theme==='dark'?'selected':''}" aria-pressed="${prefs.theme==='dark'}">Escuro</button></div></section><section class="settings-item"><div><span class="eyebrow">SEUS DADOS</span><h2>Armazenamento local</h2><p>Favoritos, histórico e registros de ferramentas ficam somente neste navegador, mesmo com login. Quem usa o mesmo perfil também pode acessá-los; a conta não sincroniza nem protege esses dados. Não há backup automático.</p></div><button class="button button-quiet" data-action="export-all">Exportar meus dados</button></section><section class="settings-item settings-danger"><div><span class="eyebrow">PRIVACIDADE</span><h2>Apagar dados deste dispositivo</h2><p>Remove favoritos, histórico, preferências e registros salvos no Help RDS neste navegador. Esta ação não pode ser desfeita.</p></div><button class="button button-danger" data-action="clear-data">Apagar dados locais</button></section><p class="settings-note">Em dispositivo compartilhado, saia da conta, exporte o que deseja guardar e limpe seus dados locais. Apagar dados locais não encerra a sessão.</p></div>`;
 }
 function aboutPage() {
- return `<section class="about-hero"><span class="eyebrow">SOBRE O PROJETO</span><h1>Aprender também é<br><em>ter as ferramentas certas.</em></h1><p>Help RDS é uma plataforma independente de apoio a estudantes do Ensino Médio Técnico em Administração da Escola Raphael Di Santo — Unidade Garcia. Um espaço para praticar, organizar ideias e aprender fazendo.</p></section><section class="about-columns"><article><span class="eyebrow">NOSSO PROPÓSITO</span><h2>Útil no dia a dia.<br>Claro para aprender.</h2><p>Calculadoras didáticas, organizadores e recursos para apoiar a vida escolar e os estudos técnicos. As ferramentas funcionam no navegador e os dados criados ficam neste dispositivo.</p></article><article class="credits-details"><span class="eyebrow">CRÉDITOS E RESPONSABILIDADES</span><div class="credit-group"><span class="eyebrow">PROGRAMAÇÃO</span><h3>Ytalo Lima</h3><p>Desenvolvimento, implementação técnica, integração dos materiais de design, testes e manutenção.</p></div><div class="credit-group"><span class="eyebrow">EQUIPE DE DESIGN</span><h3>Pedro Miranda · Matheus Gama</h3><p>Direção visual, identidade, linguagem gráfica, layouts, componentes e orientações de UX/UI.</p></div><p class="design-note">A divisão de tarefas individuais entre Pedro Miranda e Matheus Gama cabe à própria equipe. A proposta visual atual é independente e não representa materiais oficiais aprovados pela escola ou pela equipe de design.</p></article></section><section class="about-disclaimer"><span class="eyebrow">USO RESPONSÁVEL</span><h2>Aprendizado, não aconselhamento profissional.</h2><p>Os cálculos tributários, financeiros e de RH são exercícios educacionais e usam valores informados pelo estudante. Não são consultoria fiscal, jurídica, contábil ou financeira. Verifique fontes oficiais e consulte profissionais para decisões reais.</p><p>Ferramenta independente de apoio aos estudos, sem vínculo ou representação oficial da escola. Não insira informações pessoais sensíveis. A plataforma não envia seus registros para um servidor; quem usa o mesmo perfil do navegador pode acessá-los.</p></section>`;
+ return `<section class="about-hero"><span class="eyebrow">SOBRE O PROJETO</span><h1>Aprender também é<br><em>ter as ferramentas certas.</em></h1><p>Help RDS é uma plataforma independente de apoio a estudantes do Ensino Médio Técnico em Administração da Escola Raphael Di Santo — Unidade Garcia. Um espaço para praticar, organizar ideias e aprender fazendo.</p></section><section class="about-columns"><article><span class="eyebrow">NOSSO PROPÓSITO</span><h2>Útil no dia a dia.<br>Claro para aprender.</h2><p>Calculadoras didáticas, organizadores e recursos para apoiar a vida escolar e os estudos técnicos. As ferramentas funcionam no navegador e os dados criados ficam neste dispositivo.</p></article><article class="credits-details"><span class="eyebrow">CRÉDITOS E RESPONSABILIDADES</span><div class="credit-group"><span class="eyebrow">PROGRAMAÇÃO</span><h3>Ytalo Lima</h3><p>Desenvolvimento, implementação técnica, integração dos materiais de design, testes e manutenção.</p></div><div class="credit-group"><span class="eyebrow">EQUIPE DE DESIGN</span><h3>Pedro Miranda · Matheus Gama</h3><p>Direção visual, identidade, linguagem gráfica, layouts, componentes e orientações de UX/UI.</p></div><p class="design-note">A divisão de tarefas individuais entre Pedro Miranda e Matheus Gama cabe à própria equipe. A proposta visual atual é independente e não representa materiais oficiais aprovados pela escola ou pela equipe de design.</p></article></section><section class="about-disclaimer"><span class="eyebrow">USO RESPONSÁVEL</span><h2>Aprendizado, não aconselhamento profissional.</h2><p>Os cálculos tributários, financeiros e de RH são exercícios educacionais e usam valores informados pelo estudante. Não são consultoria fiscal, jurídica, contábil ou financeira. Verifique fontes oficiais e consulte profissionais para decisões reais.</p><p>Ferramenta independente de apoio aos estudos, sem vínculo ou representação oficial da escola. Não insira informações pessoais sensíveis. Os registros de estudo não são enviados para o servidor; quem usa o mesmo perfil do navegador pode acessá-los. Se você usar uma conta, seu e-mail e os dados necessários à autenticação são enviados ao Supabase.</p></section>`;
 }
 function setTheme(theme) {
   prefs.theme = theme === 'dark' ? 'dark' : 'light';
@@ -217,6 +230,7 @@ function render() {
   else if (page === 'flashcards') { title = 'Flashcards'; content = flashcardsPage(getRecords('flashcards'), flashState); }
   else if (page === 'tecnologia') { title = parts[1] ? (findGuide(parts[1])?.title || 'Tecnologia') : 'Tecnologia'; content = parts[1] ? guidePage(findGuide(parts[1])) : technologyPage(); active = 'tecnologia'; }
   else if (page === 'busca') { title = 'Busca'; content = searchResultsPage(searchQuery, searchItems(searchQuery)); }
+  else if (page === 'conta') { title = 'Minha conta'; content = accountPage({ ...authState, mode: parts[1] || '', notice: authState.notice?.route === currentRoute ? authState.notice : null }); }
   else if (page === 'settings') { title = 'Configurações'; content = settingsPage(); }
   else if (page === 'about') { title = 'Sobre o projeto'; content = aboutPage(); }
   else { title = 'Página não encontrada'; content = emptyState('Esta página não foi encontrada.', 'Confira o endereço ou volte para explorar as ferramentas.'); }
@@ -230,9 +244,128 @@ function render() {
     if (tool && panel) panel.innerHTML = renderResult(currentResult, tool);
   }
   syncMobileMenu(false);
+  if (page === 'conta') ensureAccountInitialized();
+}
+
+function ensureAccountInitialized() {
+  if (authStarted) return;
+  authStarted = true;
+  initializeAccount();
+}
+function updateAccountLink() {
+  const link = document.querySelector('#account-link');
+  if (link) link.outerHTML = accountLink(authState.user);
+}
+function accountNavigate(destination, text = '', kind = 'success') {
+  authState.notice = text ? { route: destination, text, kind } : null;
+  history.replaceState(history.state, '', callbackDestination(location.href, destination));
+  render();
+  document.querySelector('#main-content')?.focus({ preventScroll: true });
+}
+function accountFeedback(form, text, isError = false) {
+  const feedback = form.querySelector('#auth-feedback');
+  if (feedback) { feedback.textContent = text; feedback.classList.toggle('is-error', isError); }
+}
+async function handleAccountSubmit(event) {
+  event.preventDefault();
+  if (!authApi || accountActionPending) return;
+  const form = event.currentTarget;
+  const mode = form.dataset.mode;
+  if (!['sign-in', 'sign-up', 'recovery', 'new-password'].includes(mode)) return;
+  if (mode === 'new-password' && !authState.recovery) { accountFeedback(form, 'Solicite um novo link de recuperação.', true); return; }
+  const values = Object.fromEntries(new FormData(form));
+  const validation = validateAccountForm(mode, values);
+  if (validation) { accountFeedback(form, validation, true); return; }
+  const button = form.querySelector('button[type="submit"]');
+  accountActionPending = true;
+  if (button) button.disabled = true;
+  accountFeedback(form, 'Aguarde...');
+  try {
+    let result;
+    if (mode === 'sign-in') result = await authApi.signIn(values);
+    if (mode === 'sign-up') result = await authApi.signUp(values);
+    if (mode === 'recovery') result = await authApi.requestRecovery(values);
+    if (mode === 'new-password') result = await authApi.changePassword(values);
+    if (result?.error) { accountFeedback(form, accountError(result.error), true); return; }
+    if (mode === 'sign-in') {
+      if (!result?.data?.session) { accountFeedback(form, 'Não foi possível verificar a sessão. Tente novamente.', true); return; }
+      authState.user = result.data.user || result.data.session.user;
+      authState.recovery = false;
+      accountNavigate('conta', 'Você entrou na sua conta.');
+    } else if (mode === 'sign-up' && result?.data?.session) {
+      authState.user = result.data.user || result.data.session.user;
+      accountNavigate('conta', 'Sua conta foi criada.');
+    } else if (mode === 'sign-up') {
+      form.reset();
+      accountFeedback(form, 'Se esse endereço puder receber mensagens, confira seu e-mail para confirmar o cadastro.');
+    } else if (mode === 'recovery') {
+      form.reset();
+      accountFeedback(form, 'Se for possível enviar uma mensagem para esse endereço, confira seu e-mail para receber o link.');
+    } else {
+      authState.recovery = false;
+      accountNavigate('conta', 'Senha atualizada.');
+    }
+  } catch {
+    accountFeedback(form, 'Não foi possível concluir agora. Confira sua conexão e tente novamente.', true);
+  } finally {
+    accountActionPending = false;
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
+async function initializeAccount() {
+  authClient = authState.configured ? await createBrowserAuthClient(authUrl, authKey) : null;
+  if (!authClient) {
+    authState.configured = false;
+    authState.ready = true;
+    if (initialAuthCallback) accountNavigate('conta/entrar', 'O acesso por conta não está configurado neste ambiente. Solicite um novo link depois.', 'error');
+    authBooting = false;
+    if (initialAuthCallback || route().split('/')[0] === 'conta') render();
+    return;
+  }
+  authApi = accountApi(authClient, redirectUrl(location.href));
+  authClient.auth.onAuthStateChange((event, session) => {
+    const previousUser = authState.user?.id || null;
+    const previousRecovery = authState.recovery;
+    authState.user = session?.user || null;
+    if (event === 'PASSWORD_RECOVERY') authState.recovery = true;
+    if (event === 'SIGNED_OUT') authState.recovery = false;
+    const changed = previousUser !== (authState.user?.id || null) || previousRecovery !== authState.recovery;
+    // Não faça chamadas ao SDK dentro deste callback: apenas atualize a interface.
+    // Eventos duplicados, em especial INITIAL_SESSION, não podem apagar um formulário em edição.
+    if (changed && authState.ready && !authBooting) {
+      updateAccountLink();
+      if (!accountActionPending && route().split('/')[0] === 'conta') render();
+    }
+  });
+  try {
+    const initialization = await authClient.auth.initialize();
+    const { data, error } = await authClient.auth.getSession();
+    authState.user = data?.session?.user || null;
+    if (initialAuthCallback) {
+      const ok = !initialization?.error && !error && !initialAuthCallback.hasError && initialAuthCallback.hasToken && Boolean(data?.session);
+      const target = ok && initialAuthCallback.purpose === 'recovery' ? 'conta/redefinir' : (ok ? 'conta' : 'conta/entrar');
+      authState.recovery = ok && initialAuthCallback.purpose === 'recovery';
+      const text = ok ? (authState.recovery ? 'Agora você pode escolher uma nova senha.' : 'E-mail confirmado. Você está conectado.') : 'O link é inválido ou expirou. Solicite outro link.';
+      authState.notice = { route: target, text, kind: ok ? 'success' : 'error' };
+      history.replaceState(history.state, '', callbackDestination(location.href, target));
+    }
+  } catch {
+    if (initialAuthCallback) {
+      authState.notice = { route: 'conta/entrar', text: 'Não foi possível validar o link. Solicite outro e tente novamente.', kind: 'error' };
+      history.replaceState(history.state, '', callbackDestination(location.href, 'conta/entrar'));
+    }
+  } finally {
+    authState.ready = true;
+    authBooting = false;
+    if (initialAuthCallback || route().split('/')[0] === 'conta') render();
+    else updateAccountLink();
+  }
 }
 
 function bindPageEvents() {
+  const accountForm = document.querySelector('#account-form');
+  if (accountForm) accountForm.addEventListener('submit', handleAccountSubmit);
   const form = document.querySelector('#calculator-form');
   if (form) {
     const tool = findTool(route().split('/')[1]);
@@ -513,6 +646,24 @@ app.addEventListener('click', async event => {
   const button = event.target.closest('[data-action]');
   if (!button) return;
   const action = button.dataset.action;
+  if (action === 'account-signout' && authApi && !accountActionPending) {
+    accountActionPending = true;
+    button.disabled = true;
+    try {
+      const { error } = await authApi.signOut();
+      if (error) {
+        const feedback = document.querySelector('#auth-feedback');
+        if (feedback) { feedback.textContent = accountError(error); feedback.classList.add('is-error'); }
+      } else {
+        authState.user = null;
+        authState.recovery = false;
+        accountNavigate('conta/entrar', 'Você saiu da conta nesta aba.');
+      }
+    } catch {
+      const feedback = document.querySelector('#auth-feedback');
+      if (feedback) { feedback.textContent = 'Não foi possível sair. Confira sua conexão e tente novamente.'; feedback.classList.add('is-error'); }
+    } finally { accountActionPending = false; if (button.isConnected) button.disabled = false; }
+  }
   if (action === 'skip-main') { event.preventDefault(); document.querySelector('#main-content')?.focus(); }
   if (action === 'favorite') {
     const id = button.dataset.id;
@@ -733,5 +884,20 @@ document.addEventListener('keydown', event => {
   if (((event.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k'))) { event.preventDefault(); document.querySelector('#global-search')?.focus(); }
 });
 window.addEventListener('resize', () => syncMobileMenu(false));
-window.addEventListener('hashchange', () => { render(); window.scrollTo(0,0); (route() === 'busca' ? document.querySelector('#search-page-input') : document.querySelector('#main-content'))?.focus({ preventScroll:true }); });
-render();
+window.addEventListener('hashchange', () => {
+  if (authBooting) return;
+  // Um link aberto na aba atual pode mudar só o fragmento, sem recarregar a aplicação.
+  // Reinicie o SDK para que valide e remova os tokens antes de tratar a rota.
+  if (inspectAuthCallback(location.href)) { location.reload(); return; }
+  // Eventos de fragmento atrasados podem chegar após o SDK ou a navegação já ter renderizado a mesma rota.
+  if (route() === lastRenderedRoute) return;
+  render();
+  window.scrollTo(0,0);
+  (route() === 'busca' ? document.querySelector('#search-page-input') : document.querySelector('#main-content'))?.focus({ preventScroll:true });
+});
+if (authBooting) app.innerHTML = '<main id="main-content" tabindex="-1"><p role="status">Validando seu acesso...</p></main>';
+else render();
+// Só carregue o SDK no início se há sessão nesta aba ou um retorno de autenticação.
+let hasSavedSession = false;
+try { hasSavedSession = Boolean(sessionStorage.getItem('help-rds-auth-session')); } catch {}
+if (initialAuthCallback || hasSavedSession) ensureAccountInitialized();
