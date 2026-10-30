@@ -21,6 +21,10 @@ function offlineWorker() {
 
 export default defineConfig({
   base: './', // Compatível também com hospedagem estática em subdiretórios.
+  // Identifica a publicação real sem expor variáveis de servidor: o valor é
+  // apenas 'production', 'preview' ou 'local'. A medição de audiência depende
+  // dele para nunca contar desenvolvimento, testes ou prévias.
+  define: { __HELP_RDS_ENV__: JSON.stringify(process.env.VERCEL_ENV || 'local') },
   server: { host: '0.0.0.0', allowedHosts: true },
   preview: { host: '0.0.0.0', allowedHosts: true },
   plugins: [offlineWorker()],

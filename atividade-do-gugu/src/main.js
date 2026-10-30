@@ -15,13 +15,14 @@ import { lessons, findLesson, gradeLesson, careerSteps, simulateBusiness, isUsab
 import { adminPage, adminLessonPage, renderQuizFeedback, labPage, renderLabResult, labComparison, careerPage, schoolPage } from './admin-pages.js';
 import { categories, tools, findTool, findCategory } from './tools.js';
 import { calculate, money } from './calculations.js';
-import { getPrefs, savePrefs, getRecords, saveRecords, getDraft, saveDraft, clearDraft, clearAllLocalData, exportLocalData, getReviewSettings, saveReviewSettings, getOnboarding, saveOnboarding } from './storage.js';
+import { getPrefs, savePrefs, getRecords, saveRecords, getDraft, saveDraft, clearDraft, clearAllLocalData, exportLocalData, getReviewSettings, saveReviewSettings, getOnboarding, saveOnboarding, getMeasurementChoice, saveMeasurementChoice } from './storage.js';
 import { makeBackup, parseBackup, prepareRestore, applyRestore, MAX_BACKUP_BYTES } from './backup.js';
 import { attachSubject, updateSubject } from './subject-links.js';
 import { subjectSelect } from './subject-select.js';
 import { reconcileSteps } from './tasks.js';
 import { privacyPage } from './privacy.js';
 import { offlineStatus, enableOffline, disableOffline } from './offline.js';
+import { createMeasurement, deployEnvironment } from './analytics.js';
 
 const app = document.querySelector('#app');
 // Retire o retorno da URL imediatamente; o código PKCE vive só em memória até
@@ -38,6 +39,7 @@ let authStarted = false;
 let authBooting = Boolean(initialAuthCallback);
 let accountActionPending = false;
 let prefs = getPrefs();
+let measurementChoice = getMeasurementChoice();
 let currentResult = null;
 let businessPreview = null;
 let currentTimer = null;
@@ -50,6 +52,18 @@ let flashState = { mode:'due', completed:[], revealed:false };
 let searchQuery = '';
 let restorePlan = null;
 let pendingFlashDraft = null;
+// Medição de audiência agregada, sem cookies e carregada sob demanda. Fica
+// desligada no desenvolvimento, em prévias, fora do HTTPS e para quem recusou
+// (preferência, Do Not Track ou Global Privacy Control).
+const measurement = createMeasurement({
+  environment: deployEnvironment(),
+  protocol: location.protocol,
+  hostname: location.hostname,
+  allowedHosts: String(import.meta.env.VITE_ANALYTICS_HOSTS || '').split(',').map(host => host.trim()).filter(Boolean),
+  enabled: !measurementChoice.disabled,
+  doNotTrack: navigator.doNotTrack ?? window.doNotTrack,
+  globalPrivacyControl: navigator.globalPrivacyControl,
+});
 const makeId = () => globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const route = () => location.hash.replace(/^#\/?/, '').split('?')[0] || 'home';
@@ -197,6 +211,7 @@ function settingsPage() {
   <section class="settings-item"><div><span class="eyebrow">SEUS DADOS</span><h2>Armazenamento local</h2><p>Favoritos, histórico e registros ficam neste navegador, mesmo com login. A conta não sincroniza nem protege esses dados. Não há backup automático.</p></div><button class="button button-quiet" data-action="export-all">Exportar meus dados</button></section>
   <section class="settings-item settings-import"><div><span class="eyebrow">CÓPIA DE SEGURANÇA</span><h2>Restaurar dados</h2><p>Selecione um backup do Help RDS. Ele será lido neste dispositivo. Exporte uma cópia atual e feche outras abas antes de importar. A restauração entre grupos não é transacional; uma falha pode impedir a recuperação.</p></div><form id="backup-form"><label class="field"><span>Arquivo JSON (até 10 MB)</span><input type="file" name="backup" accept=".json,application/json" required></label><label class="field"><span>Tipo de arquivo</span><select name="collection"><option value="">Backup completo do Help RDS</option>${tools.filter(tool=>tool.storage && tool.type!=='timer').map(tool=>`<option value="records:${esc(tool.storage)}">Exportação individual: ${esc(tool.name)}</option>`).join('')}</select><small>Se o arquivo foi exportado por uma ferramenta, escolha a ferramenta de origem; não é possível identificá-la automaticamente.</small></label><label class="field"><span>Como importar</span><select name="mode"><option value="merge">Mesclar sem sobrescrever registros existentes</option><option value="replace">Substituir grupos presentes no arquivo</option></select></label><button type="submit" class="button button-quiet">Ver prévia da importação</button><div id="backup-preview" role="status" aria-live="polite"></div></form></section>
   <section class="settings-item offline-settings"><div><span class="eyebrow">OPCIONAL · NESTE DISPOSITIVO</span><h2>Acesso offline</h2><p>Prepare uma cópia dos arquivos públicos do aplicativo enquanto estiver conectado. Os dados continuam apenas neste navegador; isso não é sincronização nem backup. O navegador pode remover a cópia. O login Google e os links externos exigem internet.</p></div><div><p id="offline-status" role="status">Verificando disponibilidade…</p><div class="offline-actions"><button type="button" class="button button-quiet" data-action="offline-enable" disabled>Preparar acesso offline</button><button type="button" class="button button-quiet" data-action="offline-disable" hidden>Remover cópia offline</button></div></div></section>
+  <section class="settings-item"><div><span class="eyebrow">MEDIÇÃO DE AUDIÊNCIA</span><h2>Contagem de visitas</h2><p>Ajuda o responsável a saber quantas pessoas abrem o Help RDS. Envia apenas a contagem agregada de acessos e o nome da seção aberta, sem cookies, sem identificadores e sem nenhum registro de estudo ou dado da conta. Desativar vale para este navegador e interrompe novas contagens; o carregamento desta visita pode já ter sido contabilizado.</p></div><div class="segmented-control"><button data-action="set-measurement" data-value="on" class="${measurementChoice.disabled?'':'selected'}" aria-pressed="${!measurementChoice.disabled}">Ativada</button><button data-action="set-measurement" data-value="off" class="${measurementChoice.disabled?'selected':''}" aria-pressed="${measurementChoice.disabled}">Desativada</button></div></section>
   <section class="settings-item settings-danger"><div><span class="eyebrow">PRIVACIDADE</span><h2>Apagar dados deste dispositivo</h2><p>Remove favoritos, histórico, preferências e registros salvos no Help RDS neste navegador. Esta ação não pode ser desfeita.</p></div><button class="button button-danger" data-action="clear-data">Apagar dados locais</button></section><p class="settings-note">Em dispositivo compartilhado, saia da conta, exporte o que deseja guardar e limpe seus dados locais. Apagar dados locais não encerra a sessão. <a href="#/privacidade">Entenda a privacidade e a conta</a>.</p></div>`;
 }
 function aboutPage() {
@@ -264,6 +279,7 @@ function render() {
   app.innerHTML = shell(content, active, title);
   document.documentElement.dataset.theme = prefs.theme;
   document.body.dataset.page = page;
+  measurement.route(location.hash);
   bindPageEvents();
   if (page === 'flashcards' && pendingFlashDraft) {
     const form = document.querySelector('#flashcard-form');
@@ -786,6 +802,15 @@ app.addEventListener('click', async event => {
   if (action === 'dismiss-guide') { if (saveOnboarding()) { render(); document.querySelector('#main-content')?.focus({preventScroll:true}); } else toast('Não foi possível salvar a preferência neste navegador.'); }
   if (action === 'theme') setTheme(prefs.theme === 'dark' ? 'light' : 'dark');
   if (action === 'set-theme') setTheme(button.dataset.value);
+  if (action === 'set-measurement') {
+    const enabled = button.dataset.value === 'on';
+    if (!saveMeasurementChoice(!enabled)) toast('Não foi possível salvar essa preferência neste navegador.');
+    measurementChoice = { disabled: !enabled };
+    measurement.setEnabled(enabled);
+    if (enabled) measurement.start().then(() => measurement.route(location.hash));
+    document.querySelectorAll('[data-action="set-measurement"]').forEach(element => { const selected = element.dataset.value === (enabled ? 'on' : 'off'); element.classList.toggle('selected', selected); element.setAttribute('aria-pressed', String(selected)); });
+    toast(enabled ? 'Contagem de visitas ativada.' : 'Contagem de visitas desativada neste navegador.');
+  }
   if (action === 'menu') {
     const open = !document.querySelector('#sidebar')?.classList.contains('mobile-open');
     syncMobileMenu(open);
@@ -1050,5 +1075,6 @@ function focusDeepLink() {
 }
 if (authBooting) app.innerHTML = '<main id="main-content" tabindex="-1"><p role="status">Validando seu acesso...</p></main>';
 else { render(); focusDeepLink(); }
+measurement.start().then(allowed => { if (allowed) measurement.route(location.hash); });
 // Só carregue o SDK no início se há sessão Google nesta aba ou retorno de autenticação.
 if (initialAuthCallback || hasSavedAuthSession()) ensureAccountInitialized();
