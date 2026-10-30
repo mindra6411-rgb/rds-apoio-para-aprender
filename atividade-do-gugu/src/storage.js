@@ -16,6 +16,14 @@ export const getPrefs = () => {
 };
 export const savePrefs = value => write('preferences', value);
 
+// A medição de audiência é opcional e fica fora das preferências visuais para
+// que uma cópia antiga de `preferences` não reative a coleta sem querer.
+export const getMeasurementChoice = () => {
+  const value = read('measurement', {});
+  return { disabled: Boolean(value && typeof value === 'object' && !Array.isArray(value) && value.disabled === true) };
+};
+export const saveMeasurementChoice = disabled => write('measurement', { disabled: Boolean(disabled) });
+
 export const getReviewSettings = () => {
   const value = read('review-settings', {});
   const defaults = { dificil:1, medio:3, facil:7 };
